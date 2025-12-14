@@ -18,64 +18,85 @@ IMG_W, IMG_H = 832, 1216
 DEFAULT_SEED = 1234567890
 is_running = False
 
+## === GLASS SLIDER + AURORA BG PATCH START ===
 # ==========================================
 # [UI STYLE PATCH - Dark Glassmorphism]
 # ==========================================
-UI_STYLE_PATCH = """
+GLASS_DEFAULTS = {
+    "blur": 20,
+    "alpha": 0.32,
+    "border_alpha": 0.16,
+    "depth": 0.72,
+    "inset": 0.8,
+    "saturation": 160,
+}
+
+UI_STYLE_PATCH = f"""
 <style>
-    #app_root {
+    :root {{
+        --glass-blur: {GLASS_DEFAULTS["blur"]}px;
+        --glass-alpha: {GLASS_DEFAULTS["alpha"]};
+        --glass-border-alpha: {GLASS_DEFAULTS["border_alpha"]};
+        --glass-depth: {GLASS_DEFAULTS["depth"]};
+        --glass-inset: {GLASS_DEFAULTS["inset"]};
+        --glass-sat: {GLASS_DEFAULTS["saturation"]}%;
+    }}
+
+    #app_root {{
         position: relative;
         min-height: 100vh;
         padding: 18px;
-        background: radial-gradient(circle at 20% 20%, rgba(90,120,200,0.12), rgba(15,18,24,0.75) 34%, rgba(8,8,10,0.9) 76%),
-                    radial-gradient(circle at 80% 10%, rgba(140,90,200,0.12), rgba(10,10,14,0.82) 32%, rgba(6,6,8,0.9) 72%),
-                    linear-gradient(135deg, #0d0d11 0%, #0a0a0f 50%, #08080b 100%);
+        background: linear-gradient(180deg, #0b0d12 0%, #090b10 48%, #07080d 100%);
         color: rgba(255,255,255,0.9);
         font-family: "Inter", "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         overflow: hidden;
-    }
+    }}
 
     #app_root::before,
-    #app_root::after {
+    #app_root::after {{
         content: "";
         position: fixed;
-        inset: -140px;
+        inset: -160px;
         pointer-events: none;
-        filter: blur(120px);
+        filter: blur(120px) saturate(120%);
         z-index: 0;
-        animation: auroraDrift 28s ease-in-out infinite alternate;
-    }
+        animation: auroraDrift 22s ease-in-out infinite alternate;
+        opacity: 0.9;
+    }}
 
-    #app_root::before {
-        background: radial-gradient(circle at 18% 22%, rgba(120,200,255,0.22), transparent 42%),
-                    radial-gradient(circle at 78% 18%, rgba(200,140,255,0.18), transparent 40%),
-                    radial-gradient(circle at 36% 80%, rgba(90,220,200,0.18), transparent 36%);
-    }
+    #app_root::before {{
+        background: radial-gradient(circle at 18% 18%, rgba(80,200,255,0.18), transparent 38%),
+                    radial-gradient(circle at 74% 22%, rgba(150,110,255,0.16), transparent 42%),
+                    radial-gradient(circle at 36% 74%, rgba(70,220,190,0.16), transparent 38%);
+    }}
 
-    #app_root::after {
-        background: radial-gradient(circle at 64% 68%, rgba(120,90,255,0.16), transparent 44%),
-                    radial-gradient(circle at 32% 62%, rgba(255,140,120,0.12), transparent 40%),
-                    radial-gradient(circle at 82% 74%, rgba(90,180,255,0.16), transparent 42%);
+    #app_root::after {{
+        background: radial-gradient(circle at 68% 64%, rgba(90,140,255,0.16), transparent 44%),
+                    radial-gradient(circle at 28% 62%, rgba(255,140,120,0.12), transparent 42%),
+                    radial-gradient(circle at 82% 74%, rgba(120,220,255,0.16), transparent 40%);
         animation-direction: alternate-reverse;
-    }
+    }}
 
-    #app_root > * {
+    #app_root > * {{
         position: relative;
         z-index: 1;
-    }
+    }}
 
-    #glass_app {
+    #glass_app {{
         position: relative;
-        background: rgba(18,18,22,0.34);
-        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(18,18,24,var(--glass-alpha));
+        border: 1px solid rgba(255,255,255,var(--glass-border-alpha));
         border-radius: 20px;
         padding: 18px;
-        box-shadow: 0 22px 60px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.06);
-        backdrop-filter: blur(20px) saturate(160%);
-        -webkit-backdrop-filter: blur(20px) saturate(160%);
-    }
+        box-shadow:
+            0 28px 64px rgba(0,0,0, calc(0.65 * var(--glass-depth))),
+            0 12px 32px rgba(0,0,0, calc(0.55 * var(--glass-depth))),
+            inset 0 1px 0 rgba(255,255,255, calc(0.12 * var(--glass-inset)));
+        backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    }}
 
-    #glass_app::before {
+    #glass_app::before {{
         content: "";
         position: absolute;
         inset: 0;
@@ -83,34 +104,35 @@ UI_STYLE_PATCH = """
         background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
         mix-blend-mode: screen;
         pointer-events: none;
-    }
+        box-shadow: inset 0 0 0 1px rgba(255,255,255, calc(0.18 * var(--glass-inset)));
+    }}
 
-    #glass_app * {
+    #glass_app * {{
         color: rgba(255,255,255,0.92);
         text-shadow: 0 1px 4px rgba(0,0,0,0.55);
-    }
+    }}
 
-    #glass_app .nai-header-title {
+    #glass_app .nai-header-title {{
         text-align: center;
         margin: 12px 0 10px 0;
-    }
+    }}
 
-    #glass_app .nai-header-title h1 {
+    #glass_app .nai-header-title h1 {{
         font-weight: 500;
         letter-spacing: 0.26em;
         font-size: 1.6rem;
         text-transform: uppercase;
         color: rgba(255,255,255,0.92);
         text-shadow: 0 18px 48px rgba(0,0,0,0.55), 0 0 26px rgba(255,255,255,0.18);
-    }
+    }}
 
-    #glass_app .nai-header-title span.version {
+    #glass_app .nai-header-title span.version {{
         font-weight: 800;
         color: #9fd8ff;
         text-shadow: 0 0 26px rgba(111,190,255,0.68);
-    }
+    }}
 
-    #glass_app .section-title {
+    #glass_app .section-title {{
         font-size: 0.94rem;
         font-weight: 700;
         letter-spacing: 0.18em;
@@ -118,178 +140,264 @@ UI_STYLE_PATCH = """
         color: rgba(255,255,255,0.94);
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 8px;
-        padding: 8px 12px;
-        border-radius: 12px;
-        background: linear-gradient(160deg, rgba(4,4,6,0.78), rgba(12,12,16,0.8));
-        border: 1px solid rgba(255,255,255,0.12);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 18px rgba(0,0,0,0.4);
-    }
-
-    #glass_app .section-title::before {
-        content: "";
-        width: 6px;
-        height: 6px;
+        gap: 10px;
+        padding: 10px 16px;
+        margin: 4px 0 12px;
         border-radius: 999px;
-        background: radial-gradient(circle, rgba(255,255,255,0.9) 0, rgba(159,216,255,0.65) 100%);
-        box-shadow: 0 0 14px rgba(159,216,255,0.6);
-    }
+        background: linear-gradient(90deg, rgba(0,0,0,0.55), rgba(26,26,40,0.4));
+        border: 1px solid rgba(255,255,255,0.2);
+        box-shadow: 0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
+    }}
 
-    #glass_app label span {
-        color: rgba(255,255,255,0.92) !important;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        text-shadow: 0 1px 4px rgba(0,0,0,0.55);
-    }
-
-    #glass_app .glass-box {
-        background: linear-gradient(175deg, rgba(6,6,10,0.82), rgba(16,16,22,0.78));
-        border-radius: 16px;
-        border: 1px solid rgba(255,255,255,0.14);
-        box-shadow: 0 18px 42px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08);
-        padding: 14px 16px;
-        backdrop-filter: blur(16px) saturate(150%);
-        -webkit-backdrop-filter: blur(16px) saturate(150%);
-    }
-
-    #glass_app .glass-box p,
-    #glass_app .glass-box span,
-    #glass_app .glass-box label,
-    #glass_app .glass-box h1,
-    #glass_app .glass-box h2,
-    #glass_app .glass-box h3,
-    #glass_app .glass-box h4,
-    #glass_app .glass-box h5,
-    #glass_app .glass-box h6,
-    #glass_app .glass-box .section-title,
-    #glass_app .glass-box .status-label span,
-    #glass_app .glass-box .status-label label {
-        color: rgba(255,255,255,0.95) !important;
-        text-shadow: 0 1px 4px rgba(0,0,0,0.6);
-    }
-
-    #glass_app input,
-    #glass_app textarea,
-    #glass_app select,
-    #glass_app button {
-        background: rgba(4,4,8,0.75);
+    #glass_app .glass-box {{
+        background: linear-gradient(180deg, rgba(10,12,16,0.9), rgba(10,10,14,0.82));
+        border: 1px solid rgba(255,255,255,var(--glass-border-alpha));
         border-radius: 14px;
-        border: 1px solid rgba(255,255,255,0.16);
+        padding: 14px;
+        box-shadow: 0 22px 60px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255, calc(0.1 * var(--glass-inset)));
+        backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-sat));
+        -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-sat));
+        margin-bottom: 12px;
+    }}
+
+    #glass_app .glass-box .wrap.svelte-1hlfj9y,
+    #glass_app .glass-box .wrap.svelte-1f354aw,
+    #glass_app .glass-box .wrap.svelte-w4709d {{
+        background: rgba(10,10,14,0.85);
+    }}
+
+    #glass_app .glass-box .label.svelte-1f354aw,
+    #glass_app .glass-box .label.svelte-1hlfj9y {{
+        background: rgba(10,10,14,0.85);
+    }}
+
+    #glass_app .glass-box .svelte-1f354aw .slider,
+    #glass_app .glass-box .svelte-1hlfj9y .slider {{
+        background: rgba(255,255,255,0.04);
+    }}
+
+    #glass_tabs > .tab-nav {{
+        background: rgba(12,12,18,0.5);
+        border: 1px solid rgba(255,255,255,var(--glass-border-alpha));
+        border-radius: 14px;
+        margin-bottom: 10px;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+    }}
+
+    #glass_tabs button {{
+        color: rgba(255,255,255,0.86);
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        border-radius: 12px;
+        border: none;
+        background: transparent;
+        padding: 10px 16px;
+        transition: all 0.2s ease;
+    }}
+
+    #glass_tabs button.selected {{
+        background: rgba(255,255,255,0.08);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,255,255,0.08);
         color: rgba(255,255,255,0.95);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 26px rgba(0,0,0,0.45);
-    }
+    }}
+
+    #glass_tabs button:hover {{
+        background: rgba(255,255,255,0.06);
+    }}
+
+    #glass_app label,
+    #glass_app .label,
+    #glass_app .text-gray-600,
+    #glass_app .prose p {{
+        color: rgba(255,255,255,0.94) !important;
+    }}
+
+    #glass_app .status-label .wrap,
+    #glass_app .status-label .wrap label,
+    #glass_app .status-label .label-wrap,
+    #glass_app .status-label .label-wrap label {{
+        color: rgba(255,255,255,0.96) !important;
+        background: rgba(0,0,0,0.35) !important;
+        border-radius: 12px !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 10px 28px rgba(0,0,0,0.35);
+    }}
+
+    #glass_app .status-label .value,
+    #glass_app .status-label .value .wrap,
+    #glass_app .status-label .value .wrap label {{
+        color: #9fd8ff !important;
+        text-shadow: 0 0 12px rgba(111,190,255,0.5);
+    }}
+
+    #glass_app textarea,
+    #glass_app input,
+    #glass_app select,
+    #glass_app .gr-input,
+    #glass_app .container.svelte-1pl0bqf,
+    #glass_app .input-radio,
+    #glass_app .input-checkbox,
+    #glass_app .wrap.svelte-1pl0bqf,
+    #glass_app .token.svelte-1pl0bqf,
+    #glass_app .label-wrap,
+    #glass_app .input-dropdown,
+    #glass_app .select-input,
+    #glass_app .filter-wrap {{
+        background: rgba(0,0,0,0.45) !important;
+        border: 1px solid rgba(255,255,255,0.14) !important;
+        border-radius: 12px !important;
+        color: rgba(255,255,255,0.95) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 20px rgba(0,0,0,0.35);
+    }}
+
+    #glass_app .input-radio:focus, #glass_app .input-checkbox:focus,
+    #glass_app textarea:focus,
+    #glass_app input:focus,
+    #glass_app select:focus,
+    #glass_app .input-dropdown:focus,
+    #glass_app .select-input:focus,
+    #glass_app .filter-wrap:focus-within {{
+        outline: none !important;
+        border-color: rgba(111,190,255,0.65) !important;
+        box-shadow: 0 0 0 1px rgba(111,190,255,0.4), 0 12px 30px rgba(111,190,255,0.28);
+    }}
 
     #glass_app textarea::placeholder,
-    #glass_app input::placeholder {
-        color: rgba(207,207,207,0.9);
-    }
+    #glass_app input::placeholder,
+    #glass_app .prose p,
+    #glass_app .secondary {{
+        color: rgba(220,220,220,0.76) !important;
+    }}
 
-    #glass_app input:focus,
-    #glass_app textarea:focus,
-    #glass_app select:focus,
-    #glass_app button:focus {
-        outline: none;
-        border-color: rgba(159,216,255,0.5);
-        box-shadow: 0 0 24px rgba(159,216,255,0.35), inset 0 1px 0 rgba(255,255,255,0.12);
-    }
-
-    #glass_app button {
-        cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-    }
-
-    #glass_app button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 14px 32px rgba(0,0,0,0.45), 0 0 18px rgba(159,216,255,0.28);
-    }
-
-    #glass_tabs [role="tab"] {
-        background: rgba(18,18,24,0.7);
-        border-radius: 12px;
+    #glass_app button,
+    #glass_app .btn,
+    #glass_app .checkbox,
+    #glass_app .radio {{
+        border-radius: 12px !important;
+        background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
         border: 1px solid rgba(255,255,255,0.12);
-        color: rgba(255,255,255,0.85);
-        padding: 8px 16px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(0,0,0,0.35);
-    }
+        color: rgba(255,255,255,0.94) !important;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.12);
+        transition: all 0.2s ease;
+    }}
 
-    #glass_tabs [role="tab"].selected {
-        background: linear-gradient(135deg, rgba(90,140,255,0.35), rgba(90,90,130,0.45));
-        border-color: rgba(255,255,255,0.18);
-        box-shadow: 0 0 18px rgba(159,216,255,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
-        color: rgba(255,255,255,0.95);
-    }
+    #glass_app button:hover,
+    #glass_app .btn:hover {{
+        background: linear-gradient(145deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06));
+        box-shadow: 0 14px 34px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.18);
+    }}
 
-    #btn-run button, #btn-stop button, #btn-refresh button, #btn-prev button, #btn-next button {
-        background: rgba(10,10,14,0.58);
-        border-radius: 14px;
-        border: 1px solid rgba(255,255,255,0.18);
-        color: rgba(255,255,255,0.9);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 28px rgba(0,0,0,0.5);
-    }
+    #glass_app button:active,
+    #glass_app .btn:active {{
+        transform: translateY(1px);
+        box-shadow: 0 10px 22px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.14);
+    }}
 
-    #btn-run button {
-        background: linear-gradient(135deg, rgba(120,180,255,0.9), rgba(80,200,255,0.85));
-        color: #0b1323;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        font-weight: 700;
-    }
+    #btn-run {{
+        background: linear-gradient(145deg, rgba(111,190,255,0.18), rgba(111,190,255,0.06));
+        border: 1px solid rgba(111,190,255,0.35);
+        box-shadow: 0 16px 40px rgba(111,190,255,0.32), inset 0 1px 0 rgba(255,255,255,0.18);
+    }}
 
-    #btn-stop button {
-        background: linear-gradient(135deg, rgba(255,120,140,0.9), rgba(140,40,60,0.9));
-        color: #ffecec;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        font-weight: 700;
-    }
+    #btn-run:hover {{
+        box-shadow: 0 18px 46px rgba(111,190,255,0.42), inset 0 1px 0 rgba(255,255,255,0.22);
+    }}
 
-    #btn-refresh button {
-        background: linear-gradient(135deg, rgba(80,200,160,0.85), rgba(90,190,255,0.82));
-        color: #052f2f;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        font-weight: 700;
-    }
+    #btn-stop {{
+        background: linear-gradient(145deg, rgba(255,120,120,0.12), rgba(255,120,120,0.06));
+        border: 1px solid rgba(255,120,120,0.28);
+    }}
 
-    #btn-prev button, #btn-next button {
-        border-radius: 999px;
-        letter-spacing: 0.08em;
-        font-weight: 800;
-        background: linear-gradient(135deg, rgba(120,150,255,0.9), rgba(200,160,255,0.88));
-        color: #0c0f18;
-    }
+    #btn-prev,
+    #btn-next,
+    #btn-refresh {{
+        background: linear-gradient(145deg, rgba(120,255,200,0.10), rgba(120,255,200,0.05));
+        border: 1px solid rgba(120,255,200,0.24);
+    }}
 
-    #glass_app .status-label span, #glass_app .status-label label {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace !important;
-        font-size: 0.78rem !important;
-        color: rgba(230,233,240,0.95) !important;
-    }
+    #btn-prev:hover,
+    #btn-next:hover,
+    #btn-refresh:hover {{
+        box-shadow: 0 14px 36px rgba(120,255,200,0.25), inset 0 1px 0 rgba(255,255,255,0.14);
+    }}
 
-    #glass_app .glass-gallery img {
-        border-radius: 10px;
-        border: 1px solid rgba(255,255,255,0.08);
-        box-shadow: 0 10px 24px rgba(0,0,0,0.35);
-    }
+    .glass-gallery > div {{
+        background: rgba(0,0,0,0.45) !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        box-shadow: 0 12px 24px rgba(0,0,0,0.35) !important;
+    }}
 
-    #glass_app .glass-gallery button.selected,
-    #glass_app .glass-gallery button.selected img,
-    #glass_app .glass-gallery img.selected {
-        outline: 3px solid rgba(159,216,255,0.8) !important;
-        outline-offset: -2px !important;
-        box-shadow: 0 0 0 2px rgba(159,216,255,0.5) !important;
-    }
+    .glass-gallery img {{
+        border-radius: 10px !important;
+        object-fit: cover !important;
+    }}
 
-    @keyframes auroraDrift {
-        0% { transform: translate3d(-8%, -6%, 0) scale(1.02); }
-        50% { transform: translate3d(6%, 4%, 0) scale(1.05); }
-        100% { transform: translate3d(10%, 8%, 0) scale(1.08); }
-    }
+    .glass-gallery .selected img {{
+        box-shadow: 0 0 0 2px rgba(111,190,255,0.65) !important;
+    }}
+
+    textarea:focus, input:focus, select:focus {{
+        outline: none !important;
+    }}
+
+    #glass-settings .gradio-accordion-content {{ padding-top: 6px; }}
+    #glass-settings .glass-settings-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }}
+    #glass-settings .glass-settings-card {{ background: rgba(12,12,18,0.72); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 12px; box-shadow: 0 18px 38px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08); backdrop-filter: blur(14px) saturate(140%); }}
+    #glass-settings .glass-settings-card h4 {{ margin: 0 0 8px; letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.82rem; color: rgba(255,255,255,0.86); }}
+    #glass-settings .glass-settings-code {{ border-radius: 12px; overflow: hidden; }}
+    #glass-settings .copy-tip {{ color: rgba(255,255,255,0.7); font-size: 0.88rem; margin-top: 6px; text-shadow: none; }}
+
+    @keyframes auroraDrift {{
+        0% {{ transform: translate3d(-12px, 14px, 0) scale(1.02); }}
+        50% {{ transform: translate3d(22px, -18px, 0) scale(1.05); }}
+        100% {{ transform: translate3d(-18px, 12px, 0) scale(1.02); }}
+    }}
 </style>
 """
+
+
+def render_glass_var_style(blur, alpha, border_alpha, depth, inset, saturation):
+    return (
+        "<style id=\"dynamic_glass_vars\">:root{"
+        f"--glass-blur:{blur}px;"
+        f"--glass-alpha:{alpha};"
+        f"--glass-border-alpha:{border_alpha};"
+        f"--glass-depth:{depth};"
+        f"--glass-inset:{inset};"
+        f"--glass-sat:{saturation}%;" "}</style>"
+    )
+
+
+def render_glass_css_snippet(blur, alpha, border_alpha, depth, inset, saturation):
+    return (
+        ".glass-card {\n"
+        f"  background: rgba(18,18,24,{alpha});\n"
+        f"  border: 1px solid rgba(255,255,255,{border_alpha});\n"
+        "  border-radius: 20px;\n"
+        f"  backdrop-filter: blur({blur}px) saturate({saturation}%);\n"
+        f"  -webkit-backdrop-filter: blur({blur}px) saturate({saturation}%);\n"
+        "  box-shadow: \n"
+        f"    0 28px 64px rgba(0,0,0,{0.65 * depth}),\n"
+        f"    0 12px 32px rgba(0,0,0,{0.55 * depth}),\n"
+        f"    inset 0 1px 0 rgba(255,255,255,{0.12 * inset});\n"
+        f"  outline: 1px solid rgba(255,255,255,{0.18 * inset});\n"
+        "}\n"
+    )
+
+
+def update_glass_styles(blur, alpha, border_alpha, depth, inset, saturation):
+    return render_glass_var_style(blur, alpha, border_alpha, depth, inset, saturation), render_glass_css_snippet(
+        blur,
+        alpha,
+        border_alpha,
+        depth,
+        inset,
+        saturation,
+    )
+
+
+COPY_CSS_JS = "(css) => { if (!css) return; navigator.clipboard.writeText(css); }"
+
 
 KEYBIND_JS = """
 () => {
@@ -323,6 +431,8 @@ KEYBIND_JS = """
   window.addEventListener("keydown", handler, true);
 }
 """
+
+## === GLASS SLIDER + AURORA BG PATCH END ===
 
 # ==========================================
 # [NovelAI 이미지 생성 로직 - V0 버전 그대로 사용]
@@ -753,6 +863,52 @@ with gr.Blocks(title="NAI Studio V4.5 Lab", elem_id="app_root") as demo:
         # 키보드 바인딩용 더미 컴포넌트 (실제 화면에는 안 보임)
         keybind_dummy = gr.HTML("", visible=False)
 
+        glass_style_vars = gr.HTML(
+            render_glass_var_style(
+                GLASS_DEFAULTS["blur"],
+                GLASS_DEFAULTS["alpha"],
+                GLASS_DEFAULTS["border_alpha"],
+                GLASS_DEFAULTS["depth"],
+                GLASS_DEFAULTS["inset"],
+                GLASS_DEFAULTS["saturation"],
+            ),
+            elem_id="glass-style-vars",
+        )
+
+        with gr.Accordion("Glass Settings", open=False, elem_id="glass-settings"):
+            gr.Markdown(
+                "<div class='section-title'>Glass Controls</div><p class='copy-tip'>Adjust blur, transparency, border and shadow depth to preview the glassmorphism feel live.</p>",
+                elem_classes=["glass-settings-card"],
+            )
+            with gr.Row():
+                with gr.Column():
+                    with gr.Group(elem_classes=["glass-settings-card"]):
+                        glass_blur = gr.Slider(0, 40, value=GLASS_DEFAULTS["blur"], step=1, label="Blur (px)")
+                        glass_alpha = gr.Slider(0.0, 0.5, value=GLASS_DEFAULTS["alpha"], step=0.01, label="Glass Alpha")
+                        glass_border = gr.Slider(0.0, 0.6, value=GLASS_DEFAULTS["border_alpha"], step=0.01, label="Border Alpha")
+                with gr.Column():
+                    with gr.Group(elem_classes=["glass-settings-card"]):
+                        glass_depth = gr.Slider(0.0, 1.0, value=GLASS_DEFAULTS["depth"], step=0.01, label="Shadow Depth")
+                        glass_inset = gr.Slider(0.0, 2.0, value=GLASS_DEFAULTS["inset"], step=0.05, label="Inset Highlight")
+                        glass_sat = gr.Slider(80, 220, value=GLASS_DEFAULTS["saturation"], step=5, label="Saturation (%)")
+
+            glass_css_code = gr.Code(
+                value=render_glass_css_snippet(
+                    GLASS_DEFAULTS["blur"],
+                    GLASS_DEFAULTS["alpha"],
+                    GLASS_DEFAULTS["border_alpha"],
+                    GLASS_DEFAULTS["depth"],
+                    GLASS_DEFAULTS["inset"],
+                    GLASS_DEFAULTS["saturation"],
+                ),
+                language="css",
+                label="Generated CSS",
+                lines=12,
+                elem_classes=["glass-settings-code"],
+            )
+            copy_btn = gr.Button("Copy CSS", elem_id="btn-copy-css")
+            gr.Markdown("<div class='copy-tip'>Uses only custom selectors. Copy to reuse this glass card styling.</div>")
+
         default_root = "C:\\NAI_Artworks"
 
         # 아카이브용 상태
@@ -864,6 +1020,16 @@ with gr.Blocks(title="NAI Studio V4.5 Lab", elem_id="app_root") as demo:
                             with gr.Row():
                                 btn_prev = gr.Button("◀ PREV", scale=1, elem_id="btn-prev")
                                 btn_next = gr.Button("NEXT ▶", scale=1, elem_id="btn-next")
+
+    slider_inputs = [glass_blur, glass_alpha, glass_border, glass_depth, glass_inset, glass_sat]
+    for _slider in slider_inputs:
+        _slider.input(
+            update_glass_styles,
+            inputs=slider_inputs,
+            outputs=[glass_style_vars, glass_css_code],
+        )
+
+    copy_btn.click(None, inputs=[glass_css_code], outputs=[], js=COPY_CSS_JS)
 
     # ==== GENERATOR 이벤트 (V0 run_generator 사용) ====
     btn_run.click(
