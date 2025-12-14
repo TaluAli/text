@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import gradio as gr
 import requests
 import zipfile
@@ -219,6 +222,8 @@ V3_STYLE = """
     }
 </style>
 """
+
+KEYBIND_JS = """
 () => {
   if (window.__nai_arrow_bound) return;
   window.__nai_arrow_bound = true;
@@ -258,10 +263,10 @@ def generate_image(token, model_name, base_prompt, char1, char2, negative_prompt
                    guidance, rescale, width, height, seed):
     """
     NovelAI v4.5 구조 (V0에서 사용하던 안정적인 버전):
-    - base_prompt → 긍정 프롬프트
-    - char1, char2 → 캐릭터 프롬프트(v4_prompt.char_captions)
-    - negative_prompt → 부정 프롬프트 & v4_negative_prompt
-    - sampler → k_euler_ancestral
+    - base_prompt -> 긍정 프롬프트
+    - char1, char2 -> 캐릭터 프롬프트(v4_prompt.char_captions)
+    - negative_prompt -> 부정 프롬프트 & v4_negative_prompt
+    - sampler -> k_euler_ancestral
     """
 
     if not model_name or not model_name.strip():
@@ -370,7 +375,7 @@ def generate_image(token, model_name, base_prompt, char1, char2, negative_prompt
             print(f"[NovelAI ERROR] HTTP {res.status_code}")
         return None
 
-    # ZIP → PNG 추출
+    # ZIP -> PNG 추출
     try:
         z = zipfile.ZipFile(io.BytesIO(res.content))
         name_list = z.namelist()
@@ -498,7 +503,7 @@ def get_images_in_project(root_path, folder):
     return files
 
 def parse_gr_from_filename(filename):
-    """파일명 예: G4.0_R0.3.png → (4.0, 0.3)"""
+    """파일명 예: G4.0_R0.3.png -> (4.0, 0.3)"""
     m = re.search(r"G(\d+(?:\.\d)?)_R(\d+(?:\.\d)?)", filename)
     if not m:
         return None, None
