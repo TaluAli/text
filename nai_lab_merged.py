@@ -86,8 +86,8 @@ UI_STYLE_PATCH = """
     }
 
     #glass_app * {
-        color: rgba(255,255,255,0.9);
-        text-shadow: 0 1px 4px rgba(0,0,0,0.45);
+        color: rgba(255,255,255,0.92);
+        text-shadow: 0 1px 4px rgba(0,0,0,0.55);
     }
 
     #glass_app .nai-header-title {
@@ -111,15 +111,20 @@ UI_STYLE_PATCH = """
     }
 
     #glass_app .section-title {
-        font-size: 0.92rem;
+        font-size: 0.94rem;
         font-weight: 700;
         letter-spacing: 0.18em;
         text-transform: uppercase;
-        color: rgba(255,255,255,0.86);
-        display: flex;
+        color: rgba(255,255,255,0.94);
+        display: inline-flex;
         align-items: center;
         gap: 8px;
         margin-bottom: 8px;
+        padding: 8px 12px;
+        border-radius: 12px;
+        background: linear-gradient(160deg, rgba(4,4,6,0.78), rgba(12,12,16,0.8));
+        border: 1px solid rgba(255,255,255,0.12);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 18px rgba(0,0,0,0.4);
     }
 
     #glass_app .section-title::before {
@@ -132,31 +137,48 @@ UI_STYLE_PATCH = """
     }
 
     #glass_app label span {
-        color: rgba(255,255,255,0.78) !important;
+        color: rgba(255,255,255,0.92) !important;
         font-size: 0.85rem;
         text-transform: uppercase;
         letter-spacing: 0.06em;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.55);
     }
 
     #glass_app .glass-box {
-        background: linear-gradient(165deg, rgba(14,14,18,0.52), rgba(22,22,26,0.6));
+        background: linear-gradient(175deg, rgba(6,6,10,0.82), rgba(16,16,22,0.78));
         border-radius: 16px;
-        border: 1px solid rgba(255,255,255,0.12);
-        box-shadow: 0 18px 36px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.14);
+        box-shadow: 0 18px 42px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08);
         padding: 14px 16px;
-        backdrop-filter: blur(14px) saturate(140%);
-        -webkit-backdrop-filter: blur(14px) saturate(140%);
+        backdrop-filter: blur(16px) saturate(150%);
+        -webkit-backdrop-filter: blur(16px) saturate(150%);
+    }
+
+    #glass_app .glass-box p,
+    #glass_app .glass-box span,
+    #glass_app .glass-box label,
+    #glass_app .glass-box h1,
+    #glass_app .glass-box h2,
+    #glass_app .glass-box h3,
+    #glass_app .glass-box h4,
+    #glass_app .glass-box h5,
+    #glass_app .glass-box h6,
+    #glass_app .glass-box .section-title,
+    #glass_app .glass-box .status-label span,
+    #glass_app .glass-box .status-label label {
+        color: rgba(255,255,255,0.95) !important;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.6);
     }
 
     #glass_app input,
     #glass_app textarea,
     #glass_app select,
     #glass_app button {
-        background: rgba(8,8,12,0.55);
+        background: rgba(4,4,8,0.75);
         border-radius: 14px;
-        border: 1px solid rgba(255,255,255,0.14);
-        color: rgba(255,255,255,0.9);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 24px rgba(0,0,0,0.35);
+        border: 1px solid rgba(255,255,255,0.16);
+        color: rgba(255,255,255,0.95);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 26px rgba(0,0,0,0.45);
     }
 
     #glass_app textarea::placeholder,
