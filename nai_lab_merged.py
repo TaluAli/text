@@ -19,206 +19,252 @@ DEFAULT_SEED = 1234567890
 is_running = False
 
 # ==========================================
-# [CSS: 아카이브용 V0.1 스타일 유지]
+# [UI STYLE PATCH - Dark Glassmorphism]
 # ==========================================
-V3_STYLE = """
+UI_STYLE_PATCH = """
 <style>
-    body, .gradio-container {
-        background: radial-gradient(circle at 20% 20%, rgba(60,60,70,0.2), rgba(15,15,15,0.95) 40%, #0b0b0f 80%),
-                    radial-gradient(circle at 80% 0%, rgba(90,80,120,0.22), transparent 36%),
-                    linear-gradient(135deg, #0c0c0f 0%, #0f0f13 60%, #050507 100%) !important;
-        background-attachment: fixed !important;
-        color: #e4e6eb !important;
-        font-family: "Inter", "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    #app_root {
         position: relative;
         min-height: 100vh;
+        padding: 18px;
+        background: radial-gradient(circle at 20% 20%, rgba(90,120,200,0.12), rgba(15,18,24,0.75) 34%, rgba(8,8,10,0.9) 76%),
+                    radial-gradient(circle at 80% 10%, rgba(140,90,200,0.12), rgba(10,10,14,0.82) 32%, rgba(6,6,8,0.9) 72%),
+                    linear-gradient(135deg, #0d0d11 0%, #0a0a0f 50%, #08080b 100%);
+        color: rgba(255,255,255,0.9);
+        font-family: "Inter", "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        overflow: hidden;
     }
 
-    .gradio-container * {
-        text-shadow: none;
+    #app_root::before,
+    #app_root::after {
+        content: "";
+        position: fixed;
+        inset: -140px;
+        pointer-events: none;
+        filter: blur(120px);
+        z-index: 0;
+        animation: auroraDrift 28s ease-in-out infinite alternate;
     }
 
-    .gradio-container .block,
-    .gradio-container .panel,
-    .gradio-container .group,
-    .gradio-container .box,
-    .gradio-container .form,
-    .gradio-container .tabs {
-        background: transparent !important;
-        box-shadow: none !important;
+    #app_root::before {
+        background: radial-gradient(circle at 18% 22%, rgba(120,200,255,0.22), transparent 42%),
+                    radial-gradient(circle at 78% 18%, rgba(200,140,255,0.18), transparent 40%),
+                    radial-gradient(circle at 36% 80%, rgba(90,220,200,0.18), transparent 36%);
     }
 
-    .glass-box {
-        background: linear-gradient(145deg, rgba(20,20,24,0.75), rgba(18,18,22,0.55)) !important;
-        border-radius: 18px !important;
-        border: 1px solid rgba(255,255,255,0.14) !important;
-        box-shadow: 0 18px 36px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.03);
-        padding: 14px 18px !important;
-        backdrop-filter: blur(16px) !important;
-        -webkit-backdrop-filter: blur(16px) !important;
+    #app_root::after {
+        background: radial-gradient(circle at 64% 68%, rgba(120,90,255,0.16), transparent 44%),
+                    radial-gradient(circle at 32% 62%, rgba(255,140,120,0.12), transparent 40%),
+                    radial-gradient(circle at 82% 74%, rgba(90,180,255,0.16), transparent 42%);
+        animation-direction: alternate-reverse;
     }
 
-    .nai-header-title {
+    #app_root > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    #glass_app {
+        position: relative;
+        background: rgba(18,18,22,0.34);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 20px;
+        padding: 18px;
+        box-shadow: 0 22px 60px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.06);
+        backdrop-filter: blur(20px) saturate(160%);
+        -webkit-backdrop-filter: blur(20px) saturate(160%);
+    }
+
+    #glass_app::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 20px;
+        background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+        mix-blend-mode: screen;
+        pointer-events: none;
+    }
+
+    #glass_app * {
+        color: rgba(255,255,255,0.9);
+        text-shadow: 0 1px 4px rgba(0,0,0,0.45);
+    }
+
+    #glass_app .nai-header-title {
         text-align: center;
-        margin: 16px 0 8px 0;
+        margin: 12px 0 10px 0;
     }
-    .nai-header-title h1 {
-        font-weight: 400;
-        letter-spacing: 0.28em;
+
+    #glass_app .nai-header-title h1 {
+        font-weight: 500;
+        letter-spacing: 0.26em;
         font-size: 1.6rem;
         text-transform: uppercase;
-        color: #e8e8ec;
-        text-shadow: 0 12px 40px rgba(0,0,0,0.45), 0 0 20px rgba(255,255,255,0.08);
-    }
-    .nai-header-title span.version {
-        font-weight: 800;
-        color: #9fd8ff;
-        text-shadow: 0 0 26px rgba(111,190,255,0.6);
+        color: rgba(255,255,255,0.92);
+        text-shadow: 0 18px 48px rgba(0,0,0,0.55), 0 0 26px rgba(255,255,255,0.18);
     }
 
-    .section-title {
-        font-size: 0.9rem;
+    #glass_app .nai-header-title span.version {
+        font-weight: 800;
+        color: #9fd8ff;
+        text-shadow: 0 0 26px rgba(111,190,255,0.68);
+    }
+
+    #glass_app .section-title {
+        font-size: 0.92rem;
         font-weight: 700;
         letter-spacing: 0.18em;
         text-transform: uppercase;
-        color: #ededf2 !important;
+        color: rgba(255,255,255,0.86);
         display: flex;
         align-items: center;
         gap: 8px;
         margin-bottom: 8px;
     }
-    .section-title::before {
+
+    #glass_app .section-title::before {
         content: "";
         width: 6px;
         height: 6px;
         border-radius: 999px;
-        background: radial-gradient(circle, rgba(255,255,255,0.9) 0, rgba(159,216,255,0.4) 100%);
+        background: radial-gradient(circle, rgba(255,255,255,0.9) 0, rgba(159,216,255,0.65) 100%);
         box-shadow: 0 0 14px rgba(159,216,255,0.6);
     }
 
-    label span {
-        color: #e9ecf1 !important;
-        font-size: 0.82rem;
+    #glass_app label span {
+        color: rgba(255,255,255,0.78) !important;
+        font-size: 0.85rem;
         text-transform: uppercase;
         letter-spacing: 0.06em;
     }
 
-    textarea, input[type=text], input[type=number] {
-        background: linear-gradient(180deg, rgba(8,8,10,0.7), rgba(22,22,26,0.72)) !important;
-        border-radius: 14px !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
-        color: #ffffff !important;
-        font-size: 0.95rem !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 12px 28px rgba(0,0,0,0.35);
-    }
-    textarea::placeholder, input[type=text]::placeholder, input[type=number]::placeholder {
-        color: #cfcfcf !important;
-        opacity: 0.9 !important;
-    }
-    textarea:focus, input[type=text]:focus, input[type=number]:focus {
-        outline: none !important;
-        border-color: rgba(159,216,255,0.4) !important;
-        box-shadow: 0 0 22px rgba(159,216,255,0.28) !important;
+    #glass_app .glass-box {
+        background: linear-gradient(165deg, rgba(14,14,18,0.52), rgba(22,22,26,0.6));
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,0.12);
+        box-shadow: 0 18px 36px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05);
+        padding: 14px 16px;
+        backdrop-filter: blur(14px) saturate(140%);
+        -webkit-backdrop-filter: blur(14px) saturate(140%);
     }
 
-    .wrap.svelte-1clj7ev,
-    .wrap.svelte-1y6t9sp,
-    .wrap.svelte-1u2s9t2 {
-        background: linear-gradient(180deg, rgba(10,10,14,0.75), rgba(22,22,26,0.62)) !important;
-        border-radius: 12px !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-    }
-    .wrap.svelte-1clj7ev select,
-    .wrap.svelte-1y6t9sp select,
-    .wrap.svelte-1u2s9t2 select {
-        background: transparent !important;
-        color: #e5e7eb !important;
+    #glass_app input,
+    #glass_app textarea,
+    #glass_app select,
+    #glass_app button {
+        background: rgba(8,8,12,0.55);
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.14);
+        color: rgba(255,255,255,0.9);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 24px rgba(0,0,0,0.35);
     }
 
-    .gradio-container .tab-nav button {
-        background: rgba(20,20,24,0.7) !important;
-        border-radius: 999px !important;
-        border: 1px solid rgba(255,255,255,0.1) !important;
-        color: #e5e7eb !important;
-        padding: 6px 18px !important;
-        font-size: 0.8rem !important;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 24px rgba(0,0,0,0.45);
-        backdrop-filter: blur(10px);
-    }
-    .gradio-container .tab-nav button.selected {
-        background: linear-gradient(135deg, rgba(159,216,255,0.35), rgba(90,125,255,0.35), rgba(90,90,130,0.45)) !important;
-        border-color: rgba(255,255,255,0.16) !important;
-        box-shadow: 0 0 18px rgba(159,216,255,0.35), inset 0 1px 0 rgba(255,255,255,0.2);
-        color: #f9fafb !important;
+    #glass_app textarea::placeholder,
+    #glass_app input::placeholder {
+        color: rgba(207,207,207,0.9);
     }
 
-    #btn-run {
-        background: linear-gradient(135deg, rgba(120,180,255,0.9) 0%, rgba(90,140,255,0.9) 50%, rgba(80,200,255,0.85) 100%) !important;
-        border-radius: 999px !important;
-        border: 1px solid rgba(255,255,255,0.22) !important;
-        color: #0b1323 !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        padding: 10px 0 !important;
-        box-shadow: 0 14px 30px rgba(90,140,255,0.45), inset 0 1px 0 rgba(255,255,255,0.45);
-    }
-    #btn-stop {
-        background: linear-gradient(135deg, rgba(255,120,140,0.9) 0%, rgba(120,30,40,0.9) 80%) !important;
-        color: #ffecec !important;
-        border-radius: 999px !important;
-        border: 1px solid rgba(255,255,255,0.18) !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        padding: 10px 0 !important;
-        box-shadow: 0 12px 26px rgba(120,30,40,0.6), inset 0 1px 0 rgba(255,255,255,0.3);
+    #glass_app input:focus,
+    #glass_app textarea:focus,
+    #glass_app select:focus,
+    #glass_app button:focus {
+        outline: none;
+        border-color: rgba(159,216,255,0.5);
+        box-shadow: 0 0 24px rgba(159,216,255,0.35), inset 0 1px 0 rgba(255,255,255,0.12);
     }
 
-    #btn-refresh {
-        background: linear-gradient(135deg, rgba(80,200,160,0.9) 0%, rgba(90,190,255,0.85) 100%) !important;
-        border-radius: 999px !important;
-        border: 1px solid rgba(255,255,255,0.18) !important;
-        color: #063636 !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.06em;
+    #glass_app button {
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+
+    #glass_app button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 32px rgba(0,0,0,0.45), 0 0 18px rgba(159,216,255,0.28);
+    }
+
+    #glass_tabs [role="tab"] {
+        background: rgba(18,18,24,0.7);
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.12);
+        color: rgba(255,255,255,0.85);
+        padding: 8px 16px;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        padding: 8px 0 !important;
-        box-shadow: 0 12px 28px rgba(80,200,200,0.45), inset 0 1px 0 rgba(255,255,255,0.42);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(0,0,0,0.35);
     }
-    #btn-prev, #btn-next {
-        border-radius: 999px !important;
+
+    #glass_tabs [role="tab"].selected {
+        background: linear-gradient(135deg, rgba(90,140,255,0.35), rgba(90,90,130,0.45));
+        border-color: rgba(255,255,255,0.18);
+        box-shadow: 0 0 18px rgba(159,216,255,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
+        color: rgba(255,255,255,0.95);
     }
+
+    #btn-run button, #btn-stop button, #btn-refresh button, #btn-prev button, #btn-next button {
+        background: rgba(10,10,14,0.58);
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.18);
+        color: rgba(255,255,255,0.9);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 28px rgba(0,0,0,0.5);
+    }
+
+    #btn-run button {
+        background: linear-gradient(135deg, rgba(120,180,255,0.9), rgba(80,200,255,0.85));
+        color: #0b1323;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-weight: 700;
+    }
+
+    #btn-stop button {
+        background: linear-gradient(135deg, rgba(255,120,140,0.9), rgba(140,40,60,0.9));
+        color: #ffecec;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-weight: 700;
+    }
+
+    #btn-refresh button {
+        background: linear-gradient(135deg, rgba(80,200,160,0.85), rgba(90,190,255,0.82));
+        color: #052f2f;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-weight: 700;
+    }
+
     #btn-prev button, #btn-next button {
-        background: linear-gradient(135deg, rgba(120,150,255,0.9) 0%, rgba(200,160,255,0.9) 60%, rgba(255,180,140,0.85) 100%) !important;
-        border: 1px solid rgba(255,255,255,0.2) !important;
-        color: #0c0f18 !important;
-        font-weight: 800 !important;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        box-shadow: 0 14px 34px rgba(80,110,200,0.55), inset 0 1px 0 rgba(255,255,255,0.4);
+        border-radius: 999px;
+        letter-spacing: 0.08em;
+        font-weight: 800;
+        background: linear-gradient(135deg, rgba(120,150,255,0.9), rgba(200,160,255,0.88));
+        color: #0c0f18;
     }
 
-    .status-label span, .status-label label {
+    #glass_app .status-label span, #glass_app .status-label label {
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace !important;
         font-size: 0.78rem !important;
-        color: #e6e9f0 !important;
+        color: rgba(230,233,240,0.95) !important;
     }
 
-    .gallery img {
-        border-radius: 8px !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+    #glass_app .glass-gallery img {
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.08);
+        box-shadow: 0 10px 24px rgba(0,0,0,0.35);
     }
 
-    .gallery button.selected,
-    .gallery button.selected img,
-    .gallery img.selected {
+    #glass_app .glass-gallery button.selected,
+    #glass_app .glass-gallery button.selected img,
+    #glass_app .glass-gallery img.selected {
         outline: 3px solid rgba(159,216,255,0.8) !important;
         outline-offset: -2px !important;
         box-shadow: 0 0 0 2px rgba(159,216,255,0.5) !important;
+    }
+
+    @keyframes auroraDrift {
+        0% { transform: translate3d(-8%, -6%, 0) scale(1.02); }
+        50% { transform: translate3d(6%, 4%, 0) scale(1.05); }
+        100% { transform: translate3d(10%, 8%, 0) scale(1.08); }
     }
 </style>
 """
@@ -669,131 +715,133 @@ def nav_next(images, current_index):
 # ==========================================
 # [UI 구성]
 # ==========================================
-with gr.Blocks(title="NAI Studio V4.5 Lab") as demo:
-    gr.HTML(V3_STYLE)
+with gr.Blocks(title="NAI Studio V4.5 Lab", elem_id="app_root") as demo:
+    gr.HTML(UI_STYLE_PATCH)
 
-    with gr.Row():
-        gr.HTML(
-            """
-            <div class="nai-header-title">
-                <h1>NAI STUDIO <span class="version">V4.5 LAB</span></h1>
-            </div>
-            """
-        )
+    with gr.Group(elem_id="glass_app"):
+        with gr.Row():
+            gr.HTML(
+                """
+                <div class="nai-header-title">
+                    <h1>NAI STUDIO <span class="version">V4.5 LAB</span></h1>
+                </div>
+                """
+            )
 
-    # 키보드 바인딩용 더미 컴포넌트 (실제 화면에는 안 보임)
-    keybind_dummy = gr.HTML("", visible=False)
+        # 키보드 바인딩용 더미 컴포넌트 (실제 화면에는 안 보임)
+        keybind_dummy = gr.HTML("", visible=False)
 
-    default_root = "C:\\NAI_Artworks"
+        default_root = "C:\\NAI_Artworks"
 
-    # 아카이브용 상태
-    images_state = gr.State([])
-    index_state = gr.State(-1)
+        # 아카이브용 상태
+        images_state = gr.State([])
+        index_state = gr.State(-1)
 
-    with gr.Tabs():
-        # ------------------ [GENERATOR] ------------------
-        with gr.TabItem("GENERATOR"):
-            with gr.Row():
-                with gr.Column(scale=4):
-                    with gr.Group(elem_classes="glass-box"):
-                        gr.Markdown("<div class='section-title'>01. SYSTEM ACCESS</div>")
-                        token_in = gr.Textbox(label="ACCESS TOKEN", type="password")
-                        model_in = gr.Textbox(
-                            label="MODEL",
-                            value=DEFAULT_MODEL,
-                            info="예: nai-diffusion-4-5-full / nai-diffusion-4-5-curated / nai-diffusion-4-full"
-                        )
-                        root_in = gr.Textbox(label="ROOT PATH", value=default_root)
-                        folder_name_in = gr.Textbox(label="PROJECT NAME", placeholder="20251123_000000")
+        with gr.Tabs(elem_id="glass_tabs"):
+            # ------------------ [GENERATOR] ------------------
+            with gr.TabItem("GENERATOR"):
+                with gr.Row():
+                    with gr.Column(scale=4):
+                        with gr.Group(elem_classes="glass-box"):
+                            gr.Markdown("<div class='section-title'>01. SYSTEM ACCESS</div>")
+                            token_in = gr.Textbox(label="ACCESS TOKEN", type="password")
+                            model_in = gr.Textbox(
+                                label="MODEL",
+                                value=DEFAULT_MODEL,
+                                info="예: nai-diffusion-4-5-full / nai-diffusion-4-5-curated / nai-diffusion-4-full"
+                            )
+                            root_in = gr.Textbox(label="ROOT PATH", value=default_root)
+                            folder_name_in = gr.Textbox(label="PROJECT NAME", placeholder="20251123_000000")
 
-                    with gr.Group(elem_classes="glass-box"):
-                        gr.Markdown("<div class='section-title'>02. PROMPTS</div>")
-                        base_in = gr.TextArea(
-                            label="BASE PROMPT",
-                            value="1girl, solo, best quality, masterpiece",
-                            lines=2
-                        )
+                        with gr.Group(elem_classes="glass-box"):
+                            gr.Markdown("<div class='section-title'>02. PROMPTS</div>")
+                            base_in = gr.TextArea(
+                                label="BASE PROMPT",
+                                value="1girl, solo, best quality, masterpiece",
+                                lines=2
+                            )
+                            with gr.Row():
+                                c1_in = gr.Textbox(label="CHARACTER 1")
+                                c2_in = gr.Textbox(label="CHARACTER 2")
+                            neg_in = gr.TextArea(
+                                label="NEGATIVE PROMPT",
+                                value="lowres, worst quality, bad anatomy, extra limbs",
+                                lines=2
+                            )
+
+                        with gr.Group(elem_classes="glass-box"):
+                            gr.Markdown("<div class='section-title'>03. PARAMETERS</div>")
+                            seed_in = gr.Number(
+                                label="SEED",
+                                value=DEFAULT_SEED,
+                                precision=0,
+                                info="동일 Seed 로 Guidance / Rescale 만 변경",
+                            )
+
+                            gr.Markdown("**PROMPT GUIDANCE (scale, X축)**")
+                            with gr.Row():
+                                g_s = gr.Number(label="START", value=0.0)
+                                g_e = gr.Number(label="END", value=8.0)
+                                g_step = gr.Number(label="STEP", value=0.5)
+
+                            gr.Markdown("**GUIDANCE RESCALE (cfg_rescale, Y축)**")
+                            with gr.Row():
+                                r_s = gr.Number(label="START", value=0.0)
+                                r_e = gr.Number(label="END", value=1.0)
+                                r_stp = gr.Number(label="STEP", value=0.1)
+
                         with gr.Row():
-                            c1_in = gr.Textbox(label="CHARACTER 1")
-                            c2_in = gr.Textbox(label="CHARACTER 2")
-                        neg_in = gr.TextArea(
-                            label="NEGATIVE PROMPT",
-                            value="lowres, worst quality, bad anatomy, extra limbs",
-                            lines=2
-                        )
+                            btn_run = gr.Button("INITIALIZE RUN", elem_id="btn-run", scale=2)
+                            btn_stop = gr.Button("ABORT", elem_id="btn-stop", scale=1)
 
-                    with gr.Group(elem_classes="glass-box"):
-                        gr.Markdown("<div class='section-title'>03. PARAMETERS</div>")
-                        seed_in = gr.Number(
-                            label="SEED",
-                            value=DEFAULT_SEED,
-                            precision=0,
-                            info="동일 Seed 로 Guidance / Rescale 만 변경"
-                        )
+                    with gr.Column(scale=5):
+                        with gr.Group(elem_classes="glass-box"):
+                            gr.Markdown("<div class='section-title'>LIVE FEED</div>")
+                            lbl_prog = gr.Label(value="READY", label="STATUS", elem_classes=["status-label"])
+                            img_preview = gr.Image(label="PREVIEW", height=600, interactive=False, type="pil")
+                            txt_log = gr.Textbox(label="SYSTEM LOG", lines=4, interactive=False)
 
-                        gr.Markdown("**PROMPT GUIDANCE (scale, X축)**")
-                        with gr.Row():
-                            g_s = gr.Number(label="START", value=0.0)
-                            g_e = gr.Number(label="END", value=8.0)
-                            g_step = gr.Number(label="STEP", value=0.5)
+            # ------------------ [ARCHIVE VIEWER] ------------------
+            with gr.TabItem("ARCHIVE VIEWER"):
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        with gr.Group(elem_classes="glass-box", elem_id="grp-archive-select"):
+                            gr.Markdown("<div class='section-title'>ARCHIVE SELECT</div>")
+                            view_root_in = gr.Textbox(label="ROOT PATH", value=default_root)
+                            btn_refresh = gr.Button("REFRESH LIST", elem_id="btn-refresh")
+                            folder_dropdown = gr.Dropdown(label="SELECT PROJECT", choices=[], interactive=True)
+                            status_view = gr.Label(label="FILE INFO")
 
-                        gr.Markdown("**GUIDANCE RESCALE (cfg_rescale, Y축)**")
-                        with gr.Row():
-                            r_s = gr.Number(label="START", value=0.0)
-                            r_e = gr.Number(label="END", value=1.0)
-                            r_stp = gr.Number(label="STEP", value=0.1)
+                        with gr.Group(elem_classes="glass-box", elem_id="grp-current-gr"):
+                            gr.Markdown("<div class='section-title'>CURRENT G / R</div>")
+                            slider_g = gr.Slider(0, 20, value=0.0, step=0.1, label="GUIDANCE", interactive=False)
+                            slider_r = gr.Slider(0, 1, value=0.0, step=0.1, label="RESCALE", interactive=False)
 
-                    with gr.Row():
-                        btn_run = gr.Button("INITIALIZE RUN", elem_id="btn-run", scale=2)
-                        btn_stop = gr.Button("ABORT", elem_id="btn-stop", scale=1)
-
-                with gr.Column(scale=5):
-                    with gr.Group(elem_classes="glass-box"):
-                        gr.Markdown("<div class='section-title'>LIVE FEED</div>")
-                        lbl_prog = gr.Label(value="READY", label="STATUS", elem_classes=["status-label"])
-                        img_preview = gr.Image(label="PREVIEW", height=600, interactive=False, type="pil")
-                        txt_log = gr.Textbox(label="SYSTEM LOG", lines=4, interactive=False)
-
-        # ------------------ [ARCHIVE VIEWER] ------------------
-        with gr.TabItem("ARCHIVE VIEWER"):
-            with gr.Row():
-                with gr.Column(scale=2):
-                    with gr.Group(elem_classes="glass-box", elem_id="grp-archive-select"):
-                        gr.Markdown("<div class='section-title'>ARCHIVE SELECT</div>")
-                        view_root_in = gr.Textbox(label="ROOT PATH", value=default_root)
-                        btn_refresh = gr.Button("REFRESH LIST", elem_id="btn-refresh")
-                        folder_dropdown = gr.Dropdown(label="SELECT PROJECT", choices=[], interactive=True)
-                        status_view = gr.Label(label="FILE INFO")
-
-                    with gr.Group(elem_classes="glass-box", elem_id="grp-current-gr"):
-                        gr.Markdown("<div class='section-title'>CURRENT G / R</div>")
-                        slider_g = gr.Slider(0, 20, value=0.0, step=0.1, label="GUIDANCE", interactive=False)
-                        slider_r = gr.Slider(0, 1, value=0.0, step=0.1, label="RESCALE", interactive=False)
-
-                with gr.Column(scale=6):
-                    with gr.Group(elem_classes="glass-box"):
-                        gr.Markdown("<div class='section-title'>ARCHIVE GRID & VIEWER</div>")
-                        gallery = gr.Gallery(
-                            label="GRID",
-                            show_label=True,
-                            columns=6,  # 실제 열/행은 refresh/load 에서 동적으로 설정
-                            rows=3,
-                            height=420,
-                            allow_preview=False,
-                            preview=False,
-                            interactive=True,
-                            type="filepath",
-                        )
-                        view_display = gr.Image(
-                            label="DISPLAY",
-                            interactive=False,
-                            type="filepath",
-                            height=760,
-                            visible=False,
-                        )
-                        with gr.Row():
-                            btn_prev = gr.Button("◀ PREV", scale=1, elem_id="btn-prev")
-                            btn_next = gr.Button("NEXT ▶", scale=1, elem_id="btn-next")
+                    with gr.Column(scale=6):
+                        with gr.Group(elem_classes="glass-box"):
+                            gr.Markdown("<div class='section-title'>ARCHIVE GRID & VIEWER</div>")
+                            gallery = gr.Gallery(
+                                label="GRID",
+                                show_label=True,
+                                columns=6,  # 실제 열/행은 refresh/load 에서 동적으로 설정
+                                rows=3,
+                                height=420,
+                                allow_preview=False,
+                                preview=False,
+                                interactive=True,
+                                type="filepath",
+                                elem_classes=["glass-gallery"],
+                            )
+                            view_display = gr.Image(
+                                label="DISPLAY",
+                                interactive=False,
+                                type="filepath",
+                                height=760,
+                                visible=False,
+                            )
+                            with gr.Row():
+                                btn_prev = gr.Button("◀ PREV", scale=1, elem_id="btn-prev")
+                                btn_next = gr.Button("NEXT ▶", scale=1, elem_id="btn-next")
 
     # ==== GENERATOR 이벤트 (V0 run_generator 사용) ====
     btn_run.click(
