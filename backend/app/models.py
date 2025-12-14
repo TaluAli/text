@@ -50,6 +50,8 @@ class ArchiveItem(BaseModel):
     seed: int
     prompts: str
     project: str
+    filename: str
+    relpath: str
 
 
 class ArchiveResponse(BaseModel):

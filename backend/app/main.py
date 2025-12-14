@@ -99,8 +99,9 @@ def archives(
     project: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(30, ge=1, le=200),
+    q: Optional[str] = Query(None),
 ):
-    items, total = archive_service.list_archives(project, page, page_size)
+    items, total = archive_service.list_archives(project, page, page_size, q)
     return ArchiveResponse(items=items, page=page, page_size=page_size, total=total)
 
 
@@ -114,6 +115,22 @@ def get_image(image_id: str):
 
 @app.get("/api/thumbs/{image_id}")
 def get_thumb(image_id: str):
+    thumb = archive_service.generate_thumb(image_id)
+    if thumb:
+        return FileResponse(thumb)
+    raise HTTPException(status_code=404, detail="Thumbnail not found")
+
+
+@app.get("/api/raw/{image_id}")
+def get_raw_image(image_id: str):
+    path = archive_service.get_image_path(image_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(path)
+
+
+@app.get("/api/thumb/{image_id}")
+def get_thumb_single(image_id: str):
     thumb = archive_service.generate_thumb(image_id)
     if thumb:
         return FileResponse(thumb)

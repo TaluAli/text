@@ -232,6 +232,7 @@ function GeneratorPanel({ onGenerated }) {
 
 function ArchiveViewer() {
   const [project, setProject] = useState('')
+  const [search, setSearch] = useState('')
   const [items, setItems] = useState([])
   const [page, setPage] = useState(1)
   const [pageSize] = useState(20)
@@ -240,6 +241,7 @@ function ArchiveViewer() {
   const fetchArchives = async () => {
     const params = new URLSearchParams({ page, page_size: pageSize })
     if (project.trim()) params.append('project', project.trim())
+    if (search.trim()) params.append('q', search.trim())
     const res = await fetch(`${API_BASE}/api/archives?${params.toString()}`)
     const data = await res.json()
     setItems(data.items || [])
@@ -248,7 +250,7 @@ function ArchiveViewer() {
 
   useEffect(() => {
     fetchArchives()
-  }, [page, project])
+  }, [page, project, search])
 
   const selectedItem = selected >= 0 ? items[selected] : null
 
@@ -282,7 +284,9 @@ function ArchiveViewer() {
         <label>Project Filter
           <input value={project} onChange={(e) => { setProject(e.target.value); setPage(1) }} placeholder="Project name" />
         </label>
-        <div className="subtle">Use arrows or buttons to navigate</div>
+        <label>Search
+          <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} placeholder="Filename contains" />
+        </label>
       </div>
       <div className="gallery-grid">
         {items.map((item, idx) => (
@@ -301,9 +305,10 @@ function ArchiveViewer() {
       </div>
       {selectedItem && (
         <div className="detail">
-          <div className="panel-subheader">{selectedItem.project} — Seed {selectedItem.seed}</div>
+          <div className="panel-subheader">{selectedItem.project} — {selectedItem.filename}</div>
+          <div className="subtle">{selectedItem.relpath}</div>
           <img src={`${API_BASE}${selectedItem.image_url}`} alt={selectedItem.id} />
-          <div className="subtle">{selectedItem.prompts}</div>
+          <div className="subtle">{selectedItem.prompts || 'No metadata available'}</div>
         </div>
       )}
     </div>
