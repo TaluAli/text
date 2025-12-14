@@ -21,10 +21,18 @@ is_running = False
 V3_STYLE = """
 <style>
     body, .gradio-container {
-        background: radial-gradient(circle at top, #312e81 0, #0f172a 40%, #020617 100%) !important;
+        background: radial-gradient(circle at 20% 20%, rgba(60,60,70,0.2), rgba(15,15,15,0.95) 40%, #0b0b0f 80%),
+                    radial-gradient(circle at 80% 0%, rgba(90,80,120,0.22), transparent 36%),
+                    linear-gradient(135deg, #0c0c0f 0%, #0f0f13 60%, #050507 100%) !important;
         background-attachment: fixed !important;
-        color: #e5e7eb !important;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        color: #e4e6eb !important;
+        font-family: "Inter", "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        position: relative;
+        min-height: 100vh;
+    }
+
+    .gradio-container * {
+        text-shadow: none;
     }
 
     .gradio-container .block,
@@ -38,12 +46,13 @@ V3_STYLE = """
     }
 
     .glass-box {
-        background: rgba(15,23,42,0.94) !important;
+        background: linear-gradient(145deg, rgba(20,20,24,0.75), rgba(18,18,22,0.55)) !important;
         border-radius: 18px !important;
-        border: 1px solid rgba(148,163,184,0.65) !important;
-        box-shadow: 0 20px 45px rgba(15,23,42,0.95);
+        border: 1px solid rgba(255,255,255,0.14) !important;
+        box-shadow: 0 18px 36px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.03);
         padding: 14px 18px !important;
-        backdrop-filter: blur(18px) !important;
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
     }
 
     .nai-header-title {
@@ -51,17 +60,17 @@ V3_STYLE = """
         margin: 16px 0 8px 0;
     }
     .nai-header-title h1 {
-        font-weight: 300;
-        letter-spacing: 0.3em;
+        font-weight: 400;
+        letter-spacing: 0.28em;
         font-size: 1.6rem;
         text-transform: uppercase;
-        color: #e5e7eb;
-        text-shadow: 0 0 20px rgba(56,189,248,0.25);
+        color: #e8e8ec;
+        text-shadow: 0 12px 40px rgba(0,0,0,0.45), 0 0 20px rgba(255,255,255,0.08);
     }
     .nai-header-title span.version {
         font-weight: 800;
-        color: #c4b5fd;
-        text-shadow: 0 0 22px rgba(168,85,247,0.7);
+        color: #9fd8ff;
+        text-shadow: 0 0 26px rgba(111,190,255,0.6);
     }
 
     .section-title {
@@ -69,7 +78,7 @@ V3_STYLE = """
         font-weight: 700;
         letter-spacing: 0.18em;
         text-transform: uppercase;
-        color: #f9fafb !important;
+        color: #ededf2 !important;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -80,36 +89,42 @@ V3_STYLE = """
         width: 6px;
         height: 6px;
         border-radius: 999px;
-        background: radial-gradient(circle, #a855f7 0, #22d3ee 100%);
-        box-shadow: 0 0 8px rgba(168,85,247,0.9);
+        background: radial-gradient(circle, rgba(255,255,255,0.9) 0, rgba(159,216,255,0.4) 100%);
+        box-shadow: 0 0 14px rgba(159,216,255,0.6);
     }
 
     label span {
-        color: #f9fafb !important;
-        font-size: 0.78rem;
+        color: #e9ecf1 !important;
+        font-size: 0.82rem;
         text-transform: uppercase;
         letter-spacing: 0.06em;
     }
 
     textarea, input[type=text], input[type=number] {
-        background: rgba(15,23,42,0.97) !important;
-        border-radius: 12px !important;
-        border: 1px solid rgba(148,163,184,0.7) !important;
-        color: #f9fafb !important;
-        font-size: 0.9rem !important;
+        background: linear-gradient(180deg, rgba(8,8,10,0.7), rgba(22,22,26,0.72)) !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        color: #ffffff !important;
+        font-size: 0.95rem !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 12px 28px rgba(0,0,0,0.35);
+    }
+    textarea::placeholder, input[type=text]::placeholder, input[type=number]::placeholder {
+        color: #cfcfcf !important;
+        opacity: 0.9 !important;
     }
     textarea:focus, input[type=text]:focus, input[type=number]:focus {
         outline: none !important;
-        border-color: rgba(96,165,250,0.95) !important;
-        box-shadow: 0 0 18px rgba(37,99,235,0.75) !important;
+        border-color: rgba(159,216,255,0.4) !important;
+        box-shadow: 0 0 22px rgba(159,216,255,0.28) !important;
     }
 
     .wrap.svelte-1clj7ev,
     .wrap.svelte-1y6t9sp,
     .wrap.svelte-1u2s9t2 {
-        background: rgba(15,23,42,0.97) !important;
+        background: linear-gradient(180deg, rgba(10,10,14,0.75), rgba(22,22,26,0.62)) !important;
         border-radius: 12px !important;
-        border: 1px solid rgba(148,163,184,0.7) !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
     }
     .wrap.svelte-1clj7ev select,
     .wrap.svelte-1y6t9sp select,
@@ -119,103 +134,91 @@ V3_STYLE = """
     }
 
     .gradio-container .tab-nav button {
-        background: rgba(15,23,42,0.85) !important;
+        background: rgba(20,20,24,0.7) !important;
         border-radius: 999px !important;
-        border: 1px solid rgba(148,163,184,0.6) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
         color: #e5e7eb !important;
         padding: 6px 18px !important;
         font-size: 0.8rem !important;
         letter-spacing: 0.06em;
         text-transform: uppercase;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 24px rgba(0,0,0,0.45);
+        backdrop-filter: blur(10px);
     }
     .gradio-container .tab-nav button.selected {
-        background: radial-gradient(circle at top, #4f46e5 0, #a855f7 60%, #0ea5e9 100%) !important;
-        border-color: transparent !important;
-        box-shadow: 0 0 18px rgba(59,130,246,0.65);
+        background: linear-gradient(135deg, rgba(159,216,255,0.35), rgba(90,125,255,0.35), rgba(90,90,130,0.45)) !important;
+        border-color: rgba(255,255,255,0.16) !important;
+        box-shadow: 0 0 18px rgba(159,216,255,0.35), inset 0 1px 0 rgba(255,255,255,0.2);
         color: #f9fafb !important;
     }
 
     #btn-run {
-        background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #06b6d4 100%) !important;
+        background: linear-gradient(135deg, rgba(120,180,255,0.9) 0%, rgba(90,140,255,0.9) 50%, rgba(80,200,255,0.85) 100%) !important;
         border-radius: 999px !important;
-        border: none !important;
-        color: #f9fafb !important;
-        font-weight: 600 !important;
+        border: 1px solid rgba(255,255,255,0.22) !important;
+        color: #0b1323 !important;
+        font-weight: 700 !important;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         padding: 10px 0 !important;
-        box-shadow: 0 12px 30px rgba(79,70,229,0.65);
+        box-shadow: 0 14px 30px rgba(90,140,255,0.45), inset 0 1px 0 rgba(255,255,255,0.45);
     }
     #btn-stop {
-        background: radial-gradient(circle at top, #f97373 0, #b91c1c 60%, #7f1d1d 100%) !important;
-        color: #fee2e2 !important;
+        background: linear-gradient(135deg, rgba(255,120,140,0.9) 0%, rgba(120,30,40,0.9) 80%) !important;
+        color: #ffecec !important;
         border-radius: 999px !important;
-        border: none !important;
-        font-weight: 600 !important;
+        border: 1px solid rgba(255,255,255,0.18) !important;
+        font-weight: 700 !important;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         padding: 10px 0 !important;
-        box-shadow: 0 10px 24px rgba(127,29,29,0.9);
+        box-shadow: 0 12px 26px rgba(120,30,40,0.6), inset 0 1px 0 rgba(255,255,255,0.3);
     }
 
     #btn-refresh {
-        background: linear-gradient(90deg, #22c55e 0%, #0ea5e9 100%) !important;
+        background: linear-gradient(135deg, rgba(80,200,160,0.9) 0%, rgba(90,190,255,0.85) 100%) !important;
         border-radius: 999px !important;
-        border: none !important;
-        color: #064e3b !important;
+        border: 1px solid rgba(255,255,255,0.18) !important;
+        color: #063636 !important;
         font-weight: 700 !important;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         padding: 8px 0 !important;
-        box-shadow: 0 12px 30px rgba(34,197,94,0.7);
+        box-shadow: 0 12px 28px rgba(80,200,200,0.45), inset 0 1px 0 rgba(255,255,255,0.42);
     }
     #btn-prev, #btn-next {
         border-radius: 999px !important;
     }
     #btn-prev button, #btn-next button {
-        background: radial-gradient(circle at top, #4f46e5 0, #ec4899 60%, #f97316 100%) !important;
-        border: none !important;
-        color: #f9fafb !important;
-        font-weight: 700 !important;
+        background: linear-gradient(135deg, rgba(120,150,255,0.9) 0%, rgba(200,160,255,0.9) 60%, rgba(255,180,140,0.85) 100%) !important;
+        border: 1px solid rgba(255,255,255,0.2) !important;
+        color: #0c0f18 !important;
+        font-weight: 800 !important;
         letter-spacing: 0.1em;
         text-transform: uppercase;
-        box-shadow: 0 14px 34px rgba(59,130,246,0.9);
+        box-shadow: 0 14px 34px rgba(80,110,200,0.55), inset 0 1px 0 rgba(255,255,255,0.4);
     }
 
     .status-label span, .status-label label {
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace !important;
         font-size: 0.78rem !important;
+        color: #e6e9f0 !important;
     }
 
     .gallery img {
-        border-radius: 0px !important;
+        border-radius: 8px !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
     }
 
     .gallery button.selected,
     .gallery button.selected img,
     .gallery img.selected {
-        outline: 4px solid #f97316 !important;
+        outline: 3px solid rgba(159,216,255,0.8) !important;
         outline-offset: -2px !important;
-        box-shadow: 0 0 0 2px rgba(248, 113, 22, 0.8) !important;
-    }
-
-    #grp-current-gr, #grp-current-gr * {
-        color: #f9fafb !important;
-    }
-    #grp-current-gr input[type=range] {
-        accent-color: #f97316 !important;
-    }
-
-    #grp-archive-select, #grp-archive-select * {
-        color: #f9fafb !important;
+        box-shadow: 0 0 0 2px rgba(159,216,255,0.5) !important;
     }
 </style>
 """
-
-# ==========================================
-# [키보드 화살표용 JS - V0.1 코드 그대로 사용]
-# ==========================================
-KEYBIND_JS = """
 () => {
   if (window.__nai_arrow_bound) return;
   window.__nai_arrow_bound = true;
