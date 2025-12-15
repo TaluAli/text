@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
@@ -234,23 +234,55 @@ function ArchiveViewer() {
   const [project, setProject] = useState('')
   const [search, setSearch] = useState('')
   const [items, setItems] = useState([])
-  const [page, setPage] = useState(1)
-  const [pageSize] = useState(20)
   const [selected, setSelected] = useState(-1)
+  const [loading, setLoading] = useState(false)
+  const [total, setTotal] = useState(0)
+  const pageSize = 200
 
-  const fetchArchives = async () => {
-    const params = new URLSearchParams({ page, page_size: pageSize })
-    if (project.trim()) params.append('project', project.trim())
-    if (search.trim()) params.append('q', search.trim())
-    const res = await fetch(`${API_BASE}/api/archives?${params.toString()}`)
-    const data = await res.json()
-    setItems(data.items || [])
-    setSelected(data.items?.length ? 0 : -1)
-  }
+  const fetchArchives = useCallback(async (signal) => {
+    setLoading(true)
+    try {
+      let currentPage = 1
+      let aggregated = []
+      let expectedTotal = 0
+      const seen = new Set()
+      while (true) {
+        const params = new URLSearchParams({ page: String(currentPage), page_size: String(pageSize) })
+        if (project.trim()) params.append('project', project.trim())
+        if (search.trim()) params.append('q', search.trim())
+        const res = await fetch(`${API_BASE}/api/archives?${params.toString()}`, { signal })
+        if (!res.ok) break
+        const data = await res.json()
+        const batch = data.items || []
+        batch.forEach((item) => {
+          if (!seen.has(item.id)) {
+            seen.add(item.id)
+            aggregated.push(item)
+          }
+        })
+        expectedTotal = data.total ?? aggregated.length
+        if (!batch.length || aggregated.length >= expectedTotal) {
+          break
+        }
+        currentPage += 1
+      }
+      setItems(aggregated)
+      setTotal(expectedTotal)
+      setSelected(aggregated.length ? 0 : -1)
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('Archive fetch failed', err)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [pageSize, project, search])
 
   useEffect(() => {
-    fetchArchives()
-  }, [page, project, search])
+    const controller = new AbortController()
+    fetchArchives(controller.signal)
+    return () => controller.abort()
+  }, [fetchArchives])
 
   const selectedItem = selected >= 0 ? items[selected] : null
 
@@ -282,23 +314,26 @@ function ArchiveViewer() {
       <div className="panel-header">Archive Viewer</div>
       <div className="dual">
         <label>Project Filter
-          <input value={project} onChange={(e) => { setProject(e.target.value); setPage(1) }} placeholder="Project name" />
+          <input value={project} onChange={(e) => setProject(e.target.value)} placeholder="Project name" />
         </label>
         <label>Search
-          <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} placeholder="Filename contains" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filename contains" />
         </label>
       </div>
-      <div className="gallery-grid">
-        {items.map((item, idx) => (
-          <button
-            key={item.id}
-            className={`thumb ${idx === selected ? 'active' : ''}`}
-            onClick={() => setSelected(idx)}
-          >
-            <img src={`${API_BASE}${item.thumb_url}`} alt={item.id} />
-          </button>
-        ))}
+      <div className="gallery-area">
+        <div className="gallery-grid">
+          {items.map((item, idx) => (
+            <button
+              key={item.id}
+              className={`thumb ${idx === selected ? 'active' : ''}`}
+              onClick={() => setSelected(idx)}
+            >
+              <img src={`${API_BASE}${item.thumb_url}`} alt={item.id} loading="lazy" />
+            </button>
+          ))}
+        </div>
       </div>
+      <div className="subtle">{loading ? 'Loading archives…' : `Showing ${items.length} of ${total || items.length}`}</div>
       <div className="viewer-controls">
         <button onClick={() => changeSelection(-1)}>Prev</button>
         <button onClick={() => changeSelection(1)}>Next</button>
@@ -307,7 +342,7 @@ function ArchiveViewer() {
         <div className="detail">
           <div className="panel-subheader">{selectedItem.project} — {selectedItem.filename}</div>
           <div className="subtle">{selectedItem.relpath}</div>
-          <img src={`${API_BASE}${selectedItem.image_url}`} alt={selectedItem.id} />
+          <img src={`${API_BASE}${selectedItem.image_url}`} alt={selectedItem.id} loading="lazy" />
           <div className="subtle">{selectedItem.prompts || 'No metadata available'}</div>
         </div>
       )}

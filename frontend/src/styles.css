@@ -93,6 +93,7 @@ button.ghost { background: rgba(255,255,255,0.08); }
 .code-block textarea { width: 100%; min-height: 180px; background: rgba(0,0,0,0.35); color: var(--text-primary); border-radius: 12px; border: 1px solid rgba(255,255,255,0.16); }
 .code-block button { margin-top: 8px; }
 
+.gallery-area { max-height: 60vh; overflow: auto; padding-right: 4px; }
 .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
 .gallery-grid .thumb { border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 4px; background: rgba(0,0,0,0.3); }
 .gallery-grid .thumb.active { border-color: rgba(140, 200, 255, 0.8); box-shadow: 0 0 0 1px rgba(140,200,255,0.5); }
