@@ -2,6 +2,19 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
+const defaultMatrix = {
+  xParam: 'R',
+  yParam: 'G',
+  xMin: 0,
+  xMax: 0.7,
+  xStep: 0.1,
+  yMin: 3.0,
+  yMax: 5.0,
+  yStep: 0.2,
+  autoX: false,
+  autoY: false,
+}
+
 const defaultGlass = {
   blur: 22,
   alpha: 0.32,
@@ -42,6 +55,61 @@ function buildCssSnippet(settings) {
     inset 0 1px 0 rgba(255,255,255, calc(0.18 * var(--glass-inset)));
   border-radius: 20px;
 }`
+}
+
+function encodeRelpath(relpath = '') {
+  return relpath
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/')
+}
+
+function parseParamsFromName(name = '') {
+  const patterns = [
+    /G(?<g>\d+(?:\.\d+)?)\D+R(?<r>\d+(?:\.\d+)?)/i,
+    /R(?<r>\d+(?:\.\d+)?)\D+G(?<g>\d+(?:\.\d+)?)/i,
+  ]
+  for (const pattern of patterns) {
+    const match = name.match(pattern)
+    if (match && match.groups) {
+      return {
+        g: match.groups.g ? Number(match.groups.g) : null,
+        r: match.groups.r ? Number(match.groups.r) : null,
+      }
+    }
+  }
+  return { g: null, r: null }
+}
+
+function buildTicks(min, max, step) {
+  if (step <= 0 || max < min) return []
+  const ticks = []
+  for (let v = min; v <= max + 1e-9; v += step) {
+    ticks.push(Number(v.toFixed(4)))
+  }
+  return ticks
+}
+
+function nearestTick(value, ticks, step) {
+  if (value === null || value === undefined || !ticks.length) return null
+  let best = ticks[0]
+  let bestDiff = Math.abs(value - best)
+  for (const t of ticks.slice(1)) {
+    const diff = Math.abs(value - t)
+    if (diff < bestDiff) {
+      bestDiff = diff
+      best = t
+    }
+  }
+  const tolerance = step > 0 ? step / 2 + 1e-6 : 0.0001
+  if (bestDiff > tolerance) return null
+  return best
+}
+
+function uniqueSorted(values = []) {
+  return Array.from(new Set(values.filter((v) => v !== null && v !== undefined)))
+    .map((v) => Number(v))
+    .sort((a, b) => a - b)
 }
 
 function GlassSettings({ settings, setSettings }) {
@@ -231,13 +299,30 @@ function GeneratorPanel({ onGenerated }) {
 }
 
 function ArchiveViewer() {
+  const [projects, setProjects] = useState([])
   const [project, setProject] = useState('')
   const [search, setSearch] = useState('')
   const [items, setItems] = useState([])
-  const [selected, setSelected] = useState(-1)
+  const [selectedId, setSelectedId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [total, setTotal] = useState(0)
+  const [viewMode, setViewMode] = useState('grid')
+  const [matrix, setMatrix] = useState(defaultMatrix)
   const pageSize = 200
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/projects`)
+        if (!res.ok) return
+        const data = await res.json()
+        setProjects(data.projects || [])
+      } catch (err) {
+        /* ignore */
+      }
+    }
+    loadProjects()
+  }, [])
 
   const fetchArchives = useCallback(async (signal) => {
     setLoading(true)
@@ -268,7 +353,7 @@ function ArchiveViewer() {
       }
       setItems(aggregated)
       setTotal(expectedTotal)
-      setSelected(aggregated.length ? 0 : -1)
+      setSelectedId(aggregated.length ? aggregated[0].id : null)
     } catch (err) {
       if (err.name !== 'AbortError') {
         console.error('Archive fetch failed', err)
@@ -284,13 +369,77 @@ function ArchiveViewer() {
     return () => controller.abort()
   }, [fetchArchives])
 
-  const selectedItem = selected >= 0 ? items[selected] : null
+  const parsedItems = useMemo(
+    () =>
+      items.map((item) => ({
+        ...item,
+        params: parseParamsFromName(item.filename || item.relpath || ''),
+      })),
+    [items]
+  )
+
+  const thumbSrc = (item) => {
+    if (item?.relpath) return `${API_BASE}/api/thumb_path/${encodeRelpath(item.relpath)}`
+    if (item?.thumb_url) return `${API_BASE}${item.thumb_url}`
+    return ''
+  }
+
+  const imageSrc = (item) => {
+    if (item?.relpath) return `${API_BASE}/api/raw_path/${encodeRelpath(item.relpath)}`
+    if (item?.image_url) return `${API_BASE}${item.image_url}`
+    return ''
+  }
+
+  const xParamKey = matrix.xParam === 'G' ? 'g' : 'r'
+  const yParamKey = matrix.yParam === 'R' ? 'r' : 'g'
+
+  const xTicks = useMemo(() => {
+    if (matrix.autoX) {
+      return uniqueSorted(parsedItems.map((i) => i.params?.[xParamKey])).map((v) => Number(v.toFixed(3)))
+    }
+    return buildTicks(matrix.xMin, matrix.xMax, matrix.xStep)
+  }, [matrix.autoX, matrix.xMax, matrix.xMin, matrix.xStep, parsedItems, xParamKey])
+
+  const yTicks = useMemo(() => {
+    if (matrix.autoY) {
+      return uniqueSorted(parsedItems.map((i) => i.params?.[yParamKey])).map((v) => Number(v.toFixed(3)))
+    }
+    return buildTicks(matrix.yMin, matrix.yMax, matrix.yStep)
+  }, [matrix.autoY, matrix.yMax, matrix.yMin, matrix.yStep, parsedItems, yParamKey])
+
+  const { matrixCells, orderedMatrixItems } = useMemo(() => {
+    const mapping = new Map()
+    parsedItems.forEach((item) => {
+      const xVal = nearestTick(item.params?.[xParamKey], xTicks, matrix.xStep)
+      const yVal = nearestTick(item.params?.[yParamKey], yTicks, matrix.yStep)
+      if (xVal === null || yVal === null) return
+      const key = `${yVal}|${xVal}`
+      if (!mapping.has(key)) mapping.set(key, item)
+    })
+
+    const cells = []
+    const order = []
+    yTicks.forEach((yVal) => {
+      xTicks.forEach((xVal) => {
+        const key = `${yVal}|${xVal}`
+        const item = mapping.get(key) || null
+        cells.push({ key, xVal, yVal, item })
+        if (item) order.push(item)
+      })
+    })
+
+    return { matrixCells: cells, orderedMatrixItems: order }
+  }, [parsedItems, xParamKey, xTicks, yParamKey, yTicks, matrix.xStep, matrix.yStep])
+
+  const displayOrder = viewMode === 'matrix' ? orderedMatrixItems : items
+  const selectedItem = displayOrder.find((i) => i.id === selectedId) || displayOrder[0] || null
 
   const changeSelection = (delta) => {
-    if (!items.length) return
-    setSelected((idx) => {
-      if (idx < 0) return 0
-      return (idx + delta + items.length) % items.length
+    if (!displayOrder.length) return
+    setSelectedId((current) => {
+      const idx = displayOrder.findIndex((i) => i.id === current)
+      const nextIdx = idx >= 0 ? (idx + delta + displayOrder.length) % displayOrder.length : delta > 0 ? 0 : displayOrder.length - 1
+      return displayOrder[nextIdx].id
     })
   }
 
@@ -309,30 +458,124 @@ function ArchiveViewer() {
     return () => window.removeEventListener('keydown', handler)
   })
 
+  const updateMatrix = (key, value) => setMatrix((m) => ({ ...m, [key]: value }))
+
   return (
     <div className="glass-card">
       <div className="panel-header">Archive Viewer</div>
       <div className="dual">
-        <label>Project Filter
-          <input value={project} onChange={(e) => setProject(e.target.value)} placeholder="Project name" />
+        <label>Project
+          <select value={project} onChange={(e) => setProject(e.target.value)}>
+            <option value="">All Projects</option>
+            {projects.map((p) => (
+              <option key={p.name} value={p.name}>{`${p.name} (${p.count})`}</option>
+            ))}
+          </select>
         </label>
         <label>Search
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filename contains" />
         </label>
       </div>
-      <div className="gallery-area">
-        <div className="gallery-grid">
-          {items.map((item, idx) => (
-            <button
-              key={item.id}
-              className={`thumb ${idx === selected ? 'active' : ''}`}
-              onClick={() => setSelected(idx)}
-            >
-              <img src={`${API_BASE}${item.thumb_url}`} alt={item.id} loading="lazy" />
-            </button>
-          ))}
+
+      <div className="viewer-modes">
+        <div className="mode-buttons">
+          <button className={viewMode === 'grid' ? 'active' : ''} onClick={() => setViewMode('grid')}>Gallery</button>
+          <button className={viewMode === 'matrix' ? 'active' : ''} onClick={() => setViewMode('matrix')}>Matrix</button>
         </div>
+        {viewMode === 'matrix' && (
+          <div className="matrix-controls">
+            <div className="dual">
+              <label>X Axis
+                <select value={matrix.xParam} onChange={(e) => updateMatrix('xParam', e.target.value)}>
+                  <option value="R">Rescale (R)</option>
+                  <option value="G">Guidance (G)</option>
+                </select>
+              </label>
+              <label>Y Axis
+                <select value={matrix.yParam} onChange={(e) => updateMatrix('yParam', e.target.value)}>
+                  <option value="G">Guidance (G)</option>
+                  <option value="R">Rescale (R)</option>
+                </select>
+              </label>
+            </div>
+            <div className="dual">
+              <label>Y Min / Max / Step
+                <div className="triple">
+                  <input type="number" value={matrix.yMin} step="0.1" onChange={(e) => updateMatrix('yMin', Number(e.target.value))} />
+                  <input type="number" value={matrix.yMax} step="0.1" onChange={(e) => updateMatrix('yMax', Number(e.target.value))} />
+                  <input type="number" value={matrix.yStep} step="0.05" onChange={(e) => updateMatrix('yStep', Number(e.target.value))} />
+                </div>
+              </label>
+              <label>X Min / Max / Step
+                <div className="triple">
+                  <input type="number" value={matrix.xMin} step="0.1" onChange={(e) => updateMatrix('xMin', Number(e.target.value))} />
+                  <input type="number" value={matrix.xMax} step="0.1" onChange={(e) => updateMatrix('xMax', Number(e.target.value))} />
+                  <input type="number" value={matrix.xStep} step="0.05" onChange={(e) => updateMatrix('xStep', Number(e.target.value))} />
+                </div>
+              </label>
+            </div>
+            <div className="dual">
+              <label className="row-align">
+                <input type="checkbox" checked={matrix.autoY} onChange={(e) => updateMatrix('autoY', e.target.checked)} /> Auto Y ticks
+              </label>
+              <label className="row-align">
+                <input type="checkbox" checked={matrix.autoX} onChange={(e) => updateMatrix('autoX', e.target.checked)} /> Auto X ticks
+              </label>
+            </div>
+            <div className="subtle">Matrix cells built from filename tokens like "--G7.0_R0.7".</div>
+          </div>
+        )}
       </div>
+
+      {viewMode === 'grid' && (
+        <div className="gallery-area">
+          <div className="gallery-grid">
+            {items.map((item) => (
+              <button
+                key={item.id}
+                className={`thumb ${item.id === selectedId ? 'active' : ''}`}
+                onClick={() => setSelectedId(item.id)}
+              >
+                <img src={thumbSrc(item)} alt={item.id} loading="lazy" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {viewMode === 'matrix' && (
+        <div className="matrix-wrapper">
+          <div className="matrix-grid" style={{ gridTemplateColumns: `auto repeat(${xTicks.length}, minmax(120px, 1fr))` }}>
+            <div className="matrix-corner" />
+            {xTicks.map((x) => (
+              <div key={`x-${x}`} className="matrix-header">{x}</div>
+            ))}
+            {yTicks.map((y) => (
+              <React.Fragment key={`row-${y}`}>
+                <div className="matrix-header">{y}</div>
+                {xTicks.map((x) => {
+                  const cell = matrixCells.find((c) => c.xVal === x && c.yVal === y)
+                  return (
+                    <div key={`${y}-${x}`} className="matrix-cell">
+                      {cell?.item ? (
+                        <button
+                          className={`thumb ${cell.item.id === selectedId ? 'active' : ''}`}
+                          onClick={() => setSelectedId(cell.item.id)}
+                        >
+                          <img src={thumbSrc(cell.item)} alt={cell.item.id} loading="lazy" />
+                        </button>
+                      ) : (
+                        <div className="matrix-placeholder">—</div>
+                      )}
+                    </div>
+                  )
+                })}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="subtle">{loading ? 'Loading archives…' : `Showing ${items.length} of ${total || items.length}`}</div>
       <div className="viewer-controls">
         <button onClick={() => changeSelection(-1)}>Prev</button>
@@ -342,7 +585,7 @@ function ArchiveViewer() {
         <div className="detail">
           <div className="panel-subheader">{selectedItem.project} — {selectedItem.filename}</div>
           <div className="subtle">{selectedItem.relpath}</div>
-          <img src={`${API_BASE}${selectedItem.image_url}`} alt={selectedItem.id} loading="lazy" />
+          <img src={imageSrc(selectedItem)} alt={selectedItem.id} loading="lazy" />
           <div className="subtle">{selectedItem.prompts || 'No metadata available'}</div>
         </div>
       )}

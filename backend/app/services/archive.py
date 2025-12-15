@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 
 from PIL import Image
 
-from app.models import ArchiveItem, ImageMeta
+from app.models import ArchiveItem, ImageMeta, ProjectSummary
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_ARCHIVE_ROOT = os.getenv("NAI_ARCHIVE_ROOT")
@@ -34,6 +34,25 @@ def _is_under_archive(path: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _safe_relpath(relpath: str) -> Optional[Path]:
+    candidate = (ARCHIVE_ROOT / relpath).resolve()
+    if not candidate.exists() or not candidate.is_file():
+        return None
+    if not _is_under_archive(candidate):
+        return None
+    if candidate.suffix.lower() not in IMAGE_EXTS:
+        return None
+    return candidate
+
+
+def _path_thumb_url(relpath: str) -> str:
+    return f"/api/thumb_path/{relpath}"
+
+
+def _path_image_url(relpath: str) -> str:
+    return f"/api/raw_path/{relpath}"
 
 
 def _build_raw_id(path: Path) -> str:
@@ -119,8 +138,8 @@ def _meta_entry(project: str, file: Path, relpath: str, meta_json: Optional[Dict
         prompts = f"{prompts} | NEG: {neg_prompt}" if prompts else f"NEG: {neg_prompt}"
     return ArchiveItem(
         id=image_id,
-        thumb_url=f"/api/thumb/{image_id}",
-        image_url=f"/api/images/{image_id}",
+        thumb_url=_path_thumb_url(relpath),
+        image_url=_path_image_url(relpath),
         created_at=created,
         seed=int(seed_val) if seed_val is not None else 0,
         prompts=prompts,
@@ -136,8 +155,8 @@ def _raw_entry(path: Path, relpath: str, project: str) -> ArchiveItem:
     created = path.stat().st_mtime
     return ArchiveItem(
         id=raw_id,
-        thumb_url=f"/api/thumb/{raw_id}",
-        image_url=f"/api/raw/{raw_id}",
+        thumb_url=_path_thumb_url(relpath),
+        image_url=_path_image_url(relpath),
         created_at=created,
         seed=0,
         prompts="",
@@ -203,6 +222,22 @@ def list_archives(project: Optional[str], page: int, page_size: int, query: Opti
     return entries[start:end], total
 
 
+def list_projects() -> List[ProjectSummary]:
+    ARCHIVE_ROOT.mkdir(parents=True, exist_ok=True)
+    counts: Dict[str, int] = {}
+
+    for path in ARCHIVE_ROOT.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in IMAGE_EXTS:
+            continue
+        if not _is_under_archive(path):
+            continue
+        rel = path.relative_to(ARCHIVE_ROOT)
+        top_level = rel.parts[0] if len(rel.parts) > 1 else "default"
+        counts[top_level] = counts.get(top_level, 0) + 1
+
+    return [ProjectSummary(name=k, count=v) for k, v in sorted(counts.items())]
+
+
 def parse_image_id(image_id: str) -> Optional[Path]:
     if "--" not in image_id:
         return None
@@ -255,6 +290,10 @@ def get_image_path(image_id: str) -> Optional[Path]:
     return _resolve_raw_path(image_id)
 
 
+def get_path_from_relpath(relpath: str) -> Optional[Path]:
+    return _safe_relpath(relpath)
+
+
 def generate_thumb(image_id: str) -> Optional[Path]:
     img_path = get_image_path(image_id)
     if not img_path:
@@ -265,6 +304,26 @@ def generate_thumb(image_id: str) -> Optional[Path]:
     legacy = _legacy_thumb_path(image_id)
     if legacy and legacy.exists():
         return legacy
+    try:
+        with Image.open(img_path) as img:
+            img.thumbnail((512, 512))
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            thumb_path.parent.mkdir(parents=True, exist_ok=True)
+            img.save(thumb_path, format="JPEG")
+        return thumb_path
+    except Exception:
+        return None
+
+
+def generate_thumb_for_relpath(relpath: str) -> Optional[Path]:
+    img_path = _safe_relpath(relpath)
+    if not img_path:
+        return None
+    thumb_id = _build_raw_id(img_path)
+    thumb_path = _thumb_cache_path(thumb_id)
+    if thumb_path.exists():
+        return thumb_path
     try:
         with Image.open(img_path) as img:
             img.thumbnail((512, 512))

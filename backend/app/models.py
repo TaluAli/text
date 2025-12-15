@@ -61,6 +61,15 @@ class ArchiveResponse(BaseModel):
     total: int
 
 
+class ProjectSummary(BaseModel):
+    name: str
+    count: int
+
+
+class ProjectsResponse(BaseModel):
+    projects: List[ProjectSummary]
+
+
 class GenerateResponse(BaseModel):
     id: str
     image_url: str

@@ -11,6 +11,7 @@ from app.models import (
     GenerateRequest,
     GenerateResponse,
     ImageMeta,
+    ProjectsResponse,
     TokenRequest,
     TokenResponse,
 )
@@ -105,6 +106,12 @@ def archives(
     return ArchiveResponse(items=items, page=page, page_size=page_size, total=total)
 
 
+@app.get("/api/projects", response_model=ProjectsResponse)
+def projects():
+    projects = archive_service.list_projects()
+    return ProjectsResponse(projects=projects)
+
+
 @app.get("/api/images/{image_id}")
 def get_image(image_id: str):
     path = archive_service.get_image_path(image_id)
@@ -129,9 +136,25 @@ def get_raw_image(image_id: str):
     return FileResponse(path)
 
 
+@app.get("/api/raw_path/{relpath:path}")
+def get_raw_image_by_path(relpath: str):
+    path = archive_service.get_path_from_relpath(relpath)
+    if not path:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(path)
+
+
 @app.get("/api/thumb/{image_id}")
 def get_thumb_single(image_id: str):
     thumb = archive_service.generate_thumb(image_id)
+    if thumb:
+        return FileResponse(thumb)
+    raise HTTPException(status_code=404, detail="Thumbnail not found")
+
+
+@app.get("/api/thumb_path/{relpath:path}")
+def get_thumb_by_path(relpath: str):
+    thumb = archive_service.generate_thumb_for_relpath(relpath)
     if thumb:
         return FileResponse(thumb)
     raise HTTPException(status_code=404, detail="Thumbnail not found")
