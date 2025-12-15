@@ -310,7 +310,7 @@ function GeneratorPanel({ onGenerated }) {
 
 function ArchiveViewer() {
   const loadLayoutDefaults = () => {
-    const fallback = { split: 60, gridFirst: true, selColor: '#7ec8ff' }
+    const fallback = { split: 65, gridFirst: true, selColor: '#7ec8ff' }
     if (typeof window === 'undefined') return fallback
     try {
       const raw = window.localStorage.getItem('archiveLayoutDefaults')
@@ -725,7 +725,11 @@ function ArchiveViewer() {
             <div className="panel-subheader">{selectedItem.project} — {selectedItem.filename}</div>
             <div className="subtle">{selectedItem.relpath}</div>
             <img src={imageSrc(selectedItem)} alt={selectedItem.id} loading="lazy" />
-            <div className="subtle">{selectedItem.prompts || 'No metadata available'}</div>
+            <textarea
+              className="detail-meta"
+              readOnly
+              value={selectedItem.prompts || 'No metadata available'}
+            />
           </>
         )}
       </div>
