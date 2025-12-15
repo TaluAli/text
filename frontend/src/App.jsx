@@ -336,7 +336,7 @@ function ArchiveViewer() {
   const [total, setTotal] = useState(0)
   const [viewMode, setViewMode] = useState('grid')
   const [matrix, setMatrix] = useState(defaultMatrix)
-  const [yHeaderWidth, setYHeaderWidth] = useState(68)
+  const [yHeaderWidth, setYHeaderWidth] = useState(84)
   const [activeCoords, setActiveCoords] = useState({ x: null, y: null })
   const [layout, setLayout] = useState(loadLayoutDefaults)
   const layoutDefaults = useRef(loadLayoutDefaults())
@@ -527,8 +527,9 @@ function ArchiveViewer() {
 
     const measure = () => {
       const header = el.querySelector('.matrix-header.y-header')
-      const yHeader = header ? header.getBoundingClientRect().width : 90
-      setYHeaderWidth(Math.round(yHeader))
+      const yHeader = header ? header.getBoundingClientRect().width : 88
+      const clamped = Math.max(72, Math.min(96, Math.round(yHeader)))
+      setYHeaderWidth(clamped)
     }
 
     measure()
