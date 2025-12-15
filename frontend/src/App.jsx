@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
@@ -308,7 +308,9 @@ function ArchiveViewer() {
   const [total, setTotal] = useState(0)
   const [viewMode, setViewMode] = useState('grid')
   const [matrix, setMatrix] = useState(defaultMatrix)
+  const [cellSize, setCellSize] = useState({ w: 140, h: 105 })
   const pageSize = 200
+  const matrixWrapperRef = useRef(null)
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -393,25 +395,42 @@ function ArchiveViewer() {
   const xParamKey = matrix.xParam === 'G' ? 'g' : 'r'
   const yParamKey = matrix.yParam === 'R' ? 'r' : 'g'
 
+  const normalizeTick = (value) => {
+    if (value === null || value === undefined || Number.isNaN(value)) return null
+    return Number(Number(value).toFixed(1))
+  }
+
   const xTicks = useMemo(() => {
     if (matrix.autoX) {
-      return uniqueSorted(parsedItems.map((i) => i.params?.[xParamKey])).map((v) => Number(v.toFixed(3)))
+      return uniqueSorted(parsedItems.map((i) => normalizeTick(i.params?.[xParamKey]))).map((v) => Number(v.toFixed(1)))
     }
     return buildTicks(matrix.xMin, matrix.xMax, matrix.xStep)
   }, [matrix.autoX, matrix.xMax, matrix.xMin, matrix.xStep, parsedItems, xParamKey])
 
   const yTicks = useMemo(() => {
     if (matrix.autoY) {
-      return uniqueSorted(parsedItems.map((i) => i.params?.[yParamKey])).map((v) => Number(v.toFixed(3)))
+      return uniqueSorted(parsedItems.map((i) => normalizeTick(i.params?.[yParamKey]))).map((v) => Number(v.toFixed(1)))
     }
     return buildTicks(matrix.yMin, matrix.yMax, matrix.yStep)
   }, [matrix.autoY, matrix.yMax, matrix.yMin, matrix.yStep, parsedItems, yParamKey])
 
+  const inferStep = (ticks, fallback) => {
+    if (!ticks || ticks.length < 2) return fallback
+    let minDiff = Infinity
+    for (let i = 1; i < ticks.length; i += 1) {
+      minDiff = Math.min(minDiff, Math.abs(ticks[i] - ticks[i - 1]))
+    }
+    return minDiff !== Infinity ? minDiff : fallback
+  }
+
+  const effXStep = matrix.autoX ? inferStep(xTicks, matrix.xStep) : matrix.xStep
+  const effYStep = matrix.autoY ? inferStep(yTicks, matrix.yStep) : matrix.yStep
+
   const { matrixCells, orderedMatrixItems, idToCoords } = useMemo(() => {
     const mapping = new Map()
     parsedItems.forEach((item) => {
-      const xVal = nearestTick(item.params?.[xParamKey], xTicks, matrix.xStep)
-      const yVal = nearestTick(item.params?.[yParamKey], yTicks, matrix.yStep)
+      const xVal = nearestTick(item.params?.[xParamKey], xTicks, effXStep)
+      const yVal = nearestTick(item.params?.[yParamKey], yTicks, effYStep)
       if (xVal === null || yVal === null) return
       const key = `${yVal}|${xVal}`
       if (!mapping.has(key)) mapping.set(key, item)
@@ -453,6 +472,29 @@ function ArchiveViewer() {
       setActiveCoords(idToCoords.get(selectedItem.id))
     }
   }, [idToCoords, selectedItem])
+
+  useEffect(() => {
+    const el = matrixWrapperRef.current
+    if (!el) return undefined
+
+    const measure = () => {
+      const containerWidth = el.clientWidth || 0
+      const header = el.querySelector('.matrix-header.y-header')
+      const yHeaderWidth = header ? header.getBoundingClientRect().width : 90
+      const columns = Math.max(xTicks.length, 1)
+      const minW = 120
+      const maxW = 240
+      const available = Math.max(containerWidth - yHeaderWidth - 24, minW)
+      const nextW = Math.min(maxW, Math.max(minW, available / columns))
+      const aspect = 0.75
+      setCellSize({ w: Math.round(nextW), h: Math.round(nextW * aspect) })
+    }
+
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [xTicks.length])
 
   useEffect(() => {
     const handler = (e) => {
@@ -534,6 +576,11 @@ function ArchiveViewer() {
               </label>
             </div>
             <div className="subtle">Matrix cells built from filename tokens like "--G7.0_R0.7".</div>
+            {(matrix.autoX || matrix.autoY) && (
+              <div className="subtle">
+                Auto ticks: X {xTicks.length} values ({xTicks[0] ?? '–'} … {xTicks[xTicks.length - 1] ?? '–'}), Y {yTicks.length} values ({yTicks[0] ?? '–'} … {yTicks[yTicks.length - 1] ?? '–'}).
+              </div>
+            )}
             {activeCoords.x !== null && activeCoords.y !== null && (
               <div className="matrix-badge">Now viewing: {matrix.xParam}={activeCoords.x}, {matrix.yParam}={activeCoords.y}</div>
             )}
@@ -558,9 +605,13 @@ function ArchiveViewer() {
       )}
 
       {viewMode === 'matrix' && (
-        <div className="matrix-wrapper">
+        <div
+          className="matrix-wrapper"
+          ref={matrixWrapperRef}
+          style={{ '--cell-w': `${cellSize.w}px`, '--cell-h': `${cellSize.h}px` }}
+        >
           <div className="matrix-scroller">
-            <div className="matrix-grid" style={{ gridTemplateColumns: `auto repeat(${xTicks.length}, 140px)` }}>
+            <div className="matrix-grid" style={{ gridTemplateColumns: `auto repeat(${xTicks.length}, var(--cell-w))` }}>
               <div className="matrix-corner sticky-corner" />
               {xTicks.map((x) => (
                 <div
@@ -635,14 +686,16 @@ export default function App() {
           <h1>NAI Studio Web</h1>
           <p>FastAPI + React remake with premium dark glassmorphism.</p>
         </header>
-        <div className="layout">
-          <div className="left-column">
+        <div className="top-layout">
+          <div className="card-column">
             <GeneratorPanel />
-            <ArchiveViewer />
           </div>
-          <div className="right-column">
+          <div className="card-column">
             <GlassSettings settings={settings} setSettings={setSettings} />
           </div>
+        </div>
+        <div className="archive-row">
+          <ArchiveViewer />
         </div>
       </div>
     </div>

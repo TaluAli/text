@@ -68,9 +68,18 @@ def ensure_dirs(project: str):
     return project_dir
 
 
-def build_ids(project: str, seed: int) -> Tuple[str, str]:
+def _format_param(value: float, digits: int = 1) -> str:
+    try:
+        return f"{float(value):.{digits}f}"
+    except Exception:
+        return "0.0"
+
+
+def build_ids(project: str, seed: int, guidance: float, rescale: float) -> Tuple[str, str]:
     ts = int(time.time() * 1000)
-    file_name = f"{ts}_{seed}.png"
+    g_token = _format_param(guidance, 1)
+    r_token = _format_param(rescale, 1)
+    file_name = f"{ts}_{seed}_G{g_token}_R{r_token}.png"
     image_id = f"{project}--{file_name}"
     return image_id, file_name
 
@@ -79,7 +88,12 @@ def save_image_and_meta(image: Image.Image, project: str, seed: int, payload: Di
     project = sanitize_project(project)
     project_dir = ensure_dirs(project)
 
-    image_id, file_name = build_ids(project, seed)
+    image_id, file_name = build_ids(
+        project,
+        seed,
+        float(payload.get("guidance", 0)),
+        float(payload.get("rescale", 0)),
+    )
     img_path = project_dir / file_name
     meta_path = project_dir / f"{file_name}.json"
 
