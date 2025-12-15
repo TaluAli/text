@@ -64,6 +64,12 @@ function encodeRelpath(relpath = '') {
     .join('/')
 }
 
+function formatTick(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return ''
+  const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1, minimumFractionDigits: 0 })
+  return formatter.format(Number(value))
+}
+
 function parseParamsFromName(name = '') {
   const patterns = [
     /G(?<g>\d+(?:\.\d+)?)\D+R(?<r>\d+(?:\.\d+)?)/i,
@@ -330,8 +336,7 @@ function ArchiveViewer() {
   const [total, setTotal] = useState(0)
   const [viewMode, setViewMode] = useState('grid')
   const [matrix, setMatrix] = useState(defaultMatrix)
-  const [cellSize, setCellSize] = useState({ w: 140, h: 105 })
-  const [yHeaderWidth, setYHeaderWidth] = useState(64)
+  const [yHeaderWidth, setYHeaderWidth] = useState(68)
   const [activeCoords, setActiveCoords] = useState({ x: null, y: null })
   const [layout, setLayout] = useState(loadLayoutDefaults)
   const layoutDefaults = useRef(loadLayoutDefaults())
@@ -427,6 +432,15 @@ function ArchiveViewer() {
     return ''
   }
 
+  const GalleryThumb = ({ item, active, onSelect, className = '' }) => (
+    <button
+      className={`thumb ${active ? 'active' : ''} ${className}`.trim()}
+      onClick={() => onSelect?.()}
+    >
+      <img src={thumbSrc(item)} alt={item.id} loading="lazy" />
+    </button>
+  )
+
   const xParamKey = matrix.xParam === 'G' ? 'g' : 'r'
   const yParamKey = matrix.yParam === 'R' ? 'r' : 'g'
 
@@ -512,16 +526,8 @@ function ArchiveViewer() {
     if (!el) return undefined
 
     const measure = () => {
-      const containerWidth = el.clientWidth || 0
       const header = el.querySelector('.matrix-header.y-header')
       const yHeader = header ? header.getBoundingClientRect().width : 90
-      const columns = Math.max(xTicks.length, 1)
-      const minW = 120
-      const maxW = 240
-      const available = Math.max(containerWidth - yHeader - 24, minW)
-      const nextW = Math.min(maxW, Math.max(minW, available / columns))
-      const aspect = 0.75
-      setCellSize({ w: Math.round(nextW), h: Math.round(nextW * aspect) })
       setYHeaderWidth(Math.round(yHeader))
     }
 
@@ -641,28 +647,25 @@ function ArchiveViewer() {
         </div>
 
         {viewMode === 'grid' && (
-          <div className="gallery-area">
-            <div className="gallery-grid">
-              {items.map((item) => (
-                <button
-                  key={item.id}
-                  className={`thumb ${item.id === selectedId ? 'active' : ''}`}
-                  onClick={() => setSelectedId(item.id)}
-                >
-                  <img src={thumbSrc(item)} alt={item.id} loading="lazy" />
-                </button>
-              ))}
+            <div className="gallery-area">
+              <div className="gallery-grid">
+                {items.map((item) => (
+                  <GalleryThumb
+                    key={item.id}
+                    item={item}
+                    active={item.id === selectedId}
+                    onSelect={() => setSelectedId(item.id)}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         {viewMode === 'matrix' && (
           <div
             className="matrix-wrapper"
             ref={matrixWrapperRef}
             style={{
-              '--cell-w': `${cellSize.w}px`,
-              '--cell-h': `${cellSize.h}px`,
               '--yhdr': `${yHeaderWidth}px`,
               '--xcount': xTicks.length,
             }}
@@ -672,12 +675,12 @@ function ArchiveViewer() {
                 <div className="matrix-corner sticky-corner" />
                 {xTicks.map((x) => (
                   <div key={`x-${x}`} className={`matrix-header x-header ${activeCoords.x === x ? 'active-axis' : ''}`}>
-                    {x}
+                    {formatTick(x)}
                   </div>
                 ))}
                 {yTicks.map((y) => (
                   <React.Fragment key={`row-${y}`}>
-                    <div className={`matrix-header y-header ${activeCoords.y === y ? 'active-axis' : ''}`}>{y}</div>
+                    <div className={`matrix-header y-header ${activeCoords.y === y ? 'active-axis' : ''}`}>{formatTick(y)}</div>
                     {xTicks.map((x) => {
                       const cell = matrixCells.find((c) => c.xVal === x && c.yVal === y)
                       const isActive = activeCoords.x === x && activeCoords.y === y
@@ -694,15 +697,14 @@ function ArchiveViewer() {
                       return (
                         <div key={`${y}-${x}`} className={classes}>
                           {cell?.item ? (
-                            <button
-                              className={`thumb ${cell.item.id === selectedId ? 'active' : ''}`}
-                              onClick={() => {
+                            <GalleryThumb
+                              item={cell.item}
+                              active={cell.item.id === selectedId}
+                              onSelect={() => {
                                 setSelectedId(cell.item.id)
                                 setActiveCoords({ x, y })
                               }}
-                            >
-                              <img src={thumbSrc(cell.item)} alt={cell.item.id} loading="lazy" />
-                            </button>
+                            />
                           ) : (
                             <div className="matrix-placeholder">—</div>
                           )}
