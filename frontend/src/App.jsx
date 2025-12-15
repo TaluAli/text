@@ -235,8 +235,8 @@ function GeneratorPanel({ onGenerated }) {
     }
   }
 
-  return (
-    <div className="glass-card">
+    return (
+      <div className="glass-card">
       <div className="panel-header">Generator</div>
       <div className="grid-two">
         <div>
@@ -255,10 +255,20 @@ function GeneratorPanel({ onGenerated }) {
             <textarea rows="2" value={basePrompt} onChange={(e) => setBasePrompt(e.target.value)} />
           </label>
           <label>Char 1
-            <input value={char1} onChange={(e) => setChar1(e.target.value)} />
+            <textarea
+              className="prompt-textarea"
+              rows="2"
+              value={char1}
+              onChange={(e) => setChar1(e.target.value)}
+            />
           </label>
           <label>Char 2
-            <input value={char2} onChange={(e) => setChar2(e.target.value)} />
+            <textarea
+              className="prompt-textarea"
+              rows="2"
+              value={char2}
+              onChange={(e) => setChar2(e.target.value)}
+            />
           </label>
           <label>Negative Prompt
             <textarea rows="2" value={negativePrompt} onChange={(e) => setNegativePrompt(e.target.value)} />
@@ -513,8 +523,8 @@ function ArchiveViewer() {
 
   const updateMatrix = (key, value) => setMatrix((m) => ({ ...m, [key]: value }))
 
-  return (
-    <div className="glass-card">
+    return (
+      <div className="glass-card archive-card">
       <div className="panel-header">Archive Viewer</div>
       <div className="dual">
         <label>Project
