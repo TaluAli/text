@@ -331,6 +331,7 @@ function ArchiveViewer() {
   const [viewMode, setViewMode] = useState('grid')
   const [matrix, setMatrix] = useState(defaultMatrix)
   const [cellSize, setCellSize] = useState({ w: 140, h: 105 })
+  const [yHeaderWidth, setYHeaderWidth] = useState(64)
   const [activeCoords, setActiveCoords] = useState({ x: null, y: null })
   const [layout, setLayout] = useState(loadLayoutDefaults)
   const layoutDefaults = useRef(loadLayoutDefaults())
@@ -513,14 +514,15 @@ function ArchiveViewer() {
     const measure = () => {
       const containerWidth = el.clientWidth || 0
       const header = el.querySelector('.matrix-header.y-header')
-      const yHeaderWidth = header ? header.getBoundingClientRect().width : 90
+      const yHeader = header ? header.getBoundingClientRect().width : 90
       const columns = Math.max(xTicks.length, 1)
       const minW = 120
       const maxW = 240
-      const available = Math.max(containerWidth - yHeaderWidth - 24, minW)
+      const available = Math.max(containerWidth - yHeader - 24, minW)
       const nextW = Math.min(maxW, Math.max(minW, available / columns))
       const aspect = 0.75
       setCellSize({ w: Math.round(nextW), h: Math.round(nextW * aspect) })
+      setYHeaderWidth(Math.round(yHeader))
     }
 
     measure()
@@ -658,10 +660,15 @@ function ArchiveViewer() {
           <div
             className="matrix-wrapper"
             ref={matrixWrapperRef}
-            style={{ '--cell-w': `${cellSize.w}px`, '--cell-h': `${cellSize.h}px` }}
+            style={{
+              '--cell-w': `${cellSize.w}px`,
+              '--cell-h': `${cellSize.h}px`,
+              '--yhdr': `${yHeaderWidth}px`,
+              '--xcount': xTicks.length,
+            }}
           >
             <div className="matrix-scroller">
-              <div className="matrix-grid" style={{ gridTemplateColumns: `auto repeat(${xTicks.length}, var(--cell-w))` }}>
+              <div className="matrix-grid">
                 <div className="matrix-corner sticky-corner" />
                 {xTicks.map((x) => (
                   <div key={`x-${x}`} className={`matrix-header x-header ${activeCoords.x === x ? 'active-axis' : ''}`}>
@@ -724,7 +731,9 @@ function ArchiveViewer() {
           <>
             <div className="panel-subheader">{selectedItem.project} — {selectedItem.filename}</div>
             <div className="subtle">{selectedItem.relpath}</div>
-            <img src={imageSrc(selectedItem)} alt={selectedItem.id} loading="lazy" />
+            <div className="detail-image-wrap">
+              <img src={imageSrc(selectedItem)} alt={selectedItem.id} loading="lazy" />
+            </div>
             <textarea
               className="detail-meta"
               readOnly
