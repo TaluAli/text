@@ -11,8 +11,8 @@ const defaultMatrix = {
   yMin: 3.0,
   yMax: 5.0,
   yStep: 0.2,
-  autoX: false,
-  autoY: false,
+  autoX: true,
+  autoY: true,
 }
 
 const defaultGlass = {
@@ -309,6 +309,18 @@ function GeneratorPanel({ onGenerated }) {
 }
 
 function ArchiveViewer() {
+  const loadLayoutDefaults = () => {
+    const fallback = { split: 60, gridFirst: true, selColor: '#7ec8ff' }
+    if (typeof window === 'undefined') return fallback
+    try {
+      const raw = window.localStorage.getItem('archiveLayoutDefaults')
+      if (raw) return { ...fallback, ...JSON.parse(raw) }
+    } catch (err) {
+      /* ignore */
+    }
+    return fallback
+  }
+
   const [projects, setProjects] = useState([])
   const [project, setProject] = useState('')
   const [search, setSearch] = useState('')
@@ -319,8 +331,17 @@ function ArchiveViewer() {
   const [viewMode, setViewMode] = useState('grid')
   const [matrix, setMatrix] = useState(defaultMatrix)
   const [cellSize, setCellSize] = useState({ w: 140, h: 105 })
+  const [activeCoords, setActiveCoords] = useState({ x: null, y: null })
+  const [layout, setLayout] = useState(loadLayoutDefaults)
+  const layoutDefaults = useRef(loadLayoutDefaults())
   const pageSize = 200
   const matrixWrapperRef = useRef(null)
+  const splitRef = useRef(null)
+  const dragState = useRef({ active: false, startX: 0, startSplit: 60 })
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--sel-color', layout.selColor || '#7ec8ff')
+  }, [layout.selColor])
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -336,44 +357,47 @@ function ArchiveViewer() {
     loadProjects()
   }, [])
 
-  const fetchArchives = useCallback(async (signal) => {
-    setLoading(true)
-    try {
-      let currentPage = 1
-      let aggregated = []
-      let expectedTotal = 0
-      const seen = new Set()
-      while (true) {
-        const params = new URLSearchParams({ page: String(currentPage), page_size: String(pageSize) })
-        if (project.trim()) params.append('project', project.trim())
-        if (search.trim()) params.append('q', search.trim())
-        const res = await fetch(`${API_BASE}/api/archives?${params.toString()}`, { signal })
-        if (!res.ok) break
-        const data = await res.json()
-        const batch = data.items || []
-        batch.forEach((item) => {
-          if (!seen.has(item.id)) {
-            seen.add(item.id)
-            aggregated.push(item)
+  const fetchArchives = useCallback(
+    async (signal) => {
+      setLoading(true)
+      try {
+        let currentPage = 1
+        let aggregated = []
+        let expectedTotal = 0
+        const seen = new Set()
+        while (true) {
+          const params = new URLSearchParams({ page: String(currentPage), page_size: String(pageSize) })
+          if (project.trim()) params.append('project', project.trim())
+          if (search.trim()) params.append('q', search.trim())
+          const res = await fetch(`${API_BASE}/api/archives?${params.toString()}`, { signal })
+          if (!res.ok) break
+          const data = await res.json()
+          const batch = data.items || []
+          batch.forEach((item) => {
+            if (!seen.has(item.id)) {
+              seen.add(item.id)
+              aggregated.push(item)
+            }
+          })
+          expectedTotal = data.total ?? aggregated.length
+          if (!batch.length || aggregated.length >= expectedTotal) {
+            break
           }
-        })
-        expectedTotal = data.total ?? aggregated.length
-        if (!batch.length || aggregated.length >= expectedTotal) {
-          break
+          currentPage += 1
         }
-        currentPage += 1
+        setItems(aggregated)
+        setTotal(expectedTotal)
+        setSelectedId(aggregated.length ? aggregated[0].id : null)
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Archive fetch failed', err)
+        }
+      } finally {
+        setLoading(false)
       }
-      setItems(aggregated)
-      setTotal(expectedTotal)
-      setSelectedId(aggregated.length ? aggregated[0].id : null)
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error('Archive fetch failed', err)
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [pageSize, project, search])
+    },
+    [pageSize, project, search],
+  )
 
   useEffect(() => {
     const controller = new AbortController()
@@ -387,7 +411,7 @@ function ArchiveViewer() {
         ...item,
         params: parseParamsFromName(item.filename || item.relpath || ''),
       })),
-    [items]
+    [items],
   )
 
   const thumbSrc = (item) => {
@@ -462,11 +486,10 @@ function ArchiveViewer() {
     })
 
     return { matrixCells: cells, orderedMatrixItems: order, idToCoords: coordMap }
-  }, [parsedItems, xParamKey, xTicks, yParamKey, yTicks, matrix.xStep, matrix.yStep])
+  }, [parsedItems, xParamKey, xTicks, yParamKey, yTicks, matrix.xStep, matrix.yStep, effXStep, effYStep])
 
   const displayOrder = viewMode === 'matrix' ? orderedMatrixItems : items
   const selectedItem = displayOrder.find((i) => i.id === selectedId) || displayOrder[0] || null
-  const [activeCoords, setActiveCoords] = useState({ x: null, y: null })
 
   const changeSelection = (delta) => {
     if (!displayOrder.length) return
@@ -522,170 +545,247 @@ function ArchiveViewer() {
   })
 
   const updateMatrix = (key, value) => setMatrix((m) => ({ ...m, [key]: value }))
+  const handleColorChange = (e) => {
+    const value = e.target.value
+    setLayout((l) => ({ ...l, selColor: value }))
+  }
+  const swapPanels = () => setLayout((l) => ({ ...l, gridFirst: !l.gridFirst }))
+  const resetLayout = () => setLayout(layoutDefaults.current)
+  const saveDefaults = () => {
+    layoutDefaults.current = layout
+    try {
+      window.localStorage.setItem('archiveLayoutDefaults', JSON.stringify(layout))
+    } catch (err) {
+      /* ignore */
+    }
+  }
+  const clampSplit = (v) => Math.min(80, Math.max(20, v))
+  const onMove = useCallback(
+    (e) => {
+      if (!dragState.current.active || !splitRef.current) return
+      const width = splitRef.current.clientWidth || 1
+      const delta = ((e.clientX - dragState.current.startX) / width) * 100
+      const signed = layout.gridFirst ? delta : -delta
+      const next = clampSplit(dragState.current.startSplit + signed)
+      setLayout((l) => ({ ...l, split: next }))
+    },
+    [layout.gridFirst],
+  )
+  const stopDrag = useCallback(() => {
+    dragState.current.active = false
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', stopDrag)
+  }, [onMove])
+  const startDrag = (e) => {
+    dragState.current = { active: true, startX: e.clientX, startSplit: layout.split }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', stopDrag)
+  }
+  useEffect(() => () => stopDrag(), [stopDrag])
 
-    return (
-      <div className="glass-card archive-card">
-      <div className="panel-header">Archive Viewer</div>
-      <div className="dual">
-        <label>Project
-          <select value={project} onChange={(e) => setProject(e.target.value)}>
-            <option value="">All Projects</option>
-            {projects.map((p) => (
-              <option key={p.name} value={p.name}>{`${p.name} (${p.count})`}</option>
-            ))}
-          </select>
-        </label>
-        <label>Search
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filename contains" />
-        </label>
-      </div>
+  const matrixReadout = (
+    <div className="subtle">
+      Auto ticks: X {xTicks.length} values ({xTicks[0] ?? '–'} … {xTicks[xTicks.length - 1] ?? '–'}), Y {yTicks.length} values ({
+        yTicks[0] ?? '–'
+      } … {yTicks[yTicks.length - 1] ?? '–'}).
+    </div>
+  )
 
-      <div className="viewer-modes">
-        <div className="mode-buttons">
-          <button className={viewMode === 'grid' ? 'active' : ''} onClick={() => setViewMode('grid')}>Gallery</button>
-          <button className={viewMode === 'matrix' ? 'active' : ''} onClick={() => setViewMode('matrix')}>Matrix</button>
-        </div>
-        {viewMode === 'matrix' && (
-          <div className="matrix-controls">
-            <div className="dual">
-              <label>X Axis
-                <select value={matrix.xParam} onChange={(e) => updateMatrix('xParam', e.target.value)}>
-                  <option value="R">Rescale (R)</option>
-                  <option value="G">Guidance (G)</option>
-                </select>
-              </label>
-              <label>Y Axis
-                <select value={matrix.yParam} onChange={(e) => updateMatrix('yParam', e.target.value)}>
-                  <option value="G">Guidance (G)</option>
-                  <option value="R">Rescale (R)</option>
-                </select>
-              </label>
-            </div>
-            <div className="dual">
-              <label>Y Min / Max / Step
-                <div className="triple">
-                  <input type="number" value={matrix.yMin} step="0.1" onChange={(e) => updateMatrix('yMin', Number(e.target.value))} />
-                  <input type="number" value={matrix.yMax} step="0.1" onChange={(e) => updateMatrix('yMax', Number(e.target.value))} />
-                  <input type="number" value={matrix.yStep} step="0.05" onChange={(e) => updateMatrix('yStep', Number(e.target.value))} />
-                </div>
-              </label>
-              <label>X Min / Max / Step
-                <div className="triple">
-                  <input type="number" value={matrix.xMin} step="0.1" onChange={(e) => updateMatrix('xMin', Number(e.target.value))} />
-                  <input type="number" value={matrix.xMax} step="0.1" onChange={(e) => updateMatrix('xMax', Number(e.target.value))} />
-                  <input type="number" value={matrix.xStep} step="0.05" onChange={(e) => updateMatrix('xStep', Number(e.target.value))} />
-                </div>
-              </label>
-            </div>
-            <div className="dual">
-              <label className="row-align">
-                <input type="checkbox" checked={matrix.autoY} onChange={(e) => updateMatrix('autoY', e.target.checked)} /> Auto Y ticks
-              </label>
-              <label className="row-align">
-                <input type="checkbox" checked={matrix.autoX} onChange={(e) => updateMatrix('autoX', e.target.checked)} /> Auto X ticks
-              </label>
-            </div>
-            <div className="subtle">Matrix cells built from filename tokens like "--G7.0_R0.7".</div>
-            {(matrix.autoX || matrix.autoY) && (
-              <div className="subtle">
-                Auto ticks: X {xTicks.length} values ({xTicks[0] ?? '–'} … {xTicks[xTicks.length - 1] ?? '–'}), Y {yTicks.length} values ({yTicks[0] ?? '–'} … {yTicks[yTicks.length - 1] ?? '–'}).
+  const gridPanel = (
+    <div className="archive-panel" style={{ flexBasis: layout.gridFirst ? 'var(--split)' : `calc(100% - var(--split))` }}>
+      <div className="panel-body">
+        <div className="viewer-modes">
+          <div className="mode-buttons">
+            <button className={viewMode === 'grid' ? 'active' : ''} onClick={() => setViewMode('grid')}>
+              Gallery
+            </button>
+            <button className={viewMode === 'matrix' ? 'active' : ''} onClick={() => setViewMode('matrix')}>
+              Matrix
+            </button>
+          </div>
+          {viewMode === 'matrix' && (
+            <div className="matrix-controls">
+              <div className="dual">
+                <label>
+                  X Axis
+                  <select value={matrix.xParam} onChange={(e) => updateMatrix('xParam', e.target.value)}>
+                    <option value="R">Rescale (R)</option>
+                    <option value="G">Guidance (G)</option>
+                  </select>
+                </label>
+                <label>
+                  Y Axis
+                  <select value={matrix.yParam} onChange={(e) => updateMatrix('yParam', e.target.value)}>
+                    <option value="G">Guidance (G)</option>
+                    <option value="R">Rescale (R)</option>
+                  </select>
+                </label>
               </div>
-            )}
-            {activeCoords.x !== null && activeCoords.y !== null && (
-              <div className="matrix-badge">Now viewing: {matrix.xParam}={activeCoords.x}, {matrix.yParam}={activeCoords.y}</div>
-            )}
+              <div className="dual">
+                <label className="row-align">
+                  <input type="checkbox" checked={matrix.autoY} onChange={(e) => updateMatrix('autoY', e.target.checked)} /> Auto Y ticks
+                </label>
+                <label className="row-align">
+                  <input type="checkbox" checked={matrix.autoX} onChange={(e) => updateMatrix('autoX', e.target.checked)} /> Auto X ticks
+                </label>
+              </div>
+              <div className="subtle">Matrix cells built from filename tokens like "--G7.0_R0.7".</div>
+              {matrixReadout}
+              {activeCoords.x !== null && activeCoords.y !== null && (
+                <div className="matrix-badge">Now viewing: {matrix.xParam}={activeCoords.x}, {matrix.yParam}={activeCoords.y}</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {viewMode === 'grid' && (
+          <div className="gallery-area">
+            <div className="gallery-grid">
+              {items.map((item) => (
+                <button
+                  key={item.id}
+                  className={`thumb ${item.id === selectedId ? 'active' : ''}`}
+                  onClick={() => setSelectedId(item.id)}
+                >
+                  <img src={thumbSrc(item)} alt={item.id} loading="lazy" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {viewMode === 'matrix' && (
+          <div
+            className="matrix-wrapper"
+            ref={matrixWrapperRef}
+            style={{ '--cell-w': `${cellSize.w}px`, '--cell-h': `${cellSize.h}px` }}
+          >
+            <div className="matrix-scroller">
+              <div className="matrix-grid" style={{ gridTemplateColumns: `auto repeat(${xTicks.length}, var(--cell-w))` }}>
+                <div className="matrix-corner sticky-corner" />
+                {xTicks.map((x) => (
+                  <div key={`x-${x}`} className={`matrix-header x-header ${activeCoords.x === x ? 'active-axis' : ''}`}>
+                    {x}
+                  </div>
+                ))}
+                {yTicks.map((y) => (
+                  <React.Fragment key={`row-${y}`}>
+                    <div className={`matrix-header y-header ${activeCoords.y === y ? 'active-axis' : ''}`}>{y}</div>
+                    {xTicks.map((x) => {
+                      const cell = matrixCells.find((c) => c.xVal === x && c.yVal === y)
+                      const isActive = activeCoords.x === x && activeCoords.y === y
+                      const sameX = activeCoords.x === x
+                      const sameY = activeCoords.y === y
+                      const classes = [
+                        'matrixCell',
+                        isActive ? 'matrixCell--active' : '',
+                        sameX ? 'matrixCell--col' : '',
+                        sameY ? 'matrixCell--row' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')
+                      return (
+                        <div key={`${y}-${x}`} className={classes}>
+                          {cell?.item ? (
+                            <button
+                              className={`thumb ${cell.item.id === selectedId ? 'active' : ''}`}
+                              onClick={() => {
+                                setSelectedId(cell.item.id)
+                                setActiveCoords({ x, y })
+                              }}
+                            >
+                              <img src={thumbSrc(cell.item)} alt={cell.item.id} loading="lazy" />
+                            </button>
+                          ) : (
+                            <div className="matrix-placeholder">—</div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>
-
-      {viewMode === 'grid' && (
-        <div className="gallery-area">
-          <div className="gallery-grid">
-            {items.map((item) => (
-              <button
-                key={item.id}
-                className={`thumb ${item.id === selectedId ? 'active' : ''}`}
-                onClick={() => setSelectedId(item.id)}
-              >
-                <img src={thumbSrc(item)} alt={item.id} loading="lazy" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {viewMode === 'matrix' && (
-        <div
-          className="matrix-wrapper"
-          ref={matrixWrapperRef}
-          style={{ '--cell-w': `${cellSize.w}px`, '--cell-h': `${cellSize.h}px` }}
-        >
-          <div className="matrix-scroller">
-            <div className="matrix-grid" style={{ gridTemplateColumns: `auto repeat(${xTicks.length}, var(--cell-w))` }}>
-              <div className="matrix-corner sticky-corner" />
-              {xTicks.map((x) => (
-                <div
-                  key={`x-${x}`}
-                  className={`matrix-header x-header ${activeCoords.x === x ? 'active-axis' : ''}`}
-                >
-                  {x}
-                </div>
-              ))}
-              {yTicks.map((y) => (
-                <React.Fragment key={`row-${y}`}>
-                  <div className={`matrix-header y-header ${activeCoords.y === y ? 'active-axis' : ''}`}>{y}</div>
-                  {xTicks.map((x) => {
-                    const cell = matrixCells.find((c) => c.xVal === x && c.yVal === y)
-                    const isActive = activeCoords.x === x && activeCoords.y === y
-                    const sameX = activeCoords.x === x
-                    const sameY = activeCoords.y === y
-                    return (
-                      <div
-                        key={`${y}-${x}`}
-                        className={`matrix-cell ${isActive ? 'active-cell' : ''} ${sameX ? 'axis-x' : ''} ${sameY ? 'axis-y' : ''}`}
-                      >
-                        {cell?.item ? (
-                          <button
-                            className={`thumb ${cell.item.id === selectedId ? 'active' : ''}`}
-                            onClick={() => {
-                              setSelectedId(cell.item.id)
-                              setActiveCoords({ x, y })
-                            }}
-                          >
-                            <img src={thumbSrc(cell.item)} alt={cell.item.id} loading="lazy" />
-                          </button>
-                        ) : (
-                          <div className="matrix-placeholder">—</div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </React.Fragment>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="subtle">{loading ? 'Loading archives…' : `Showing ${items.length} of ${total || items.length}`}</div>
       <div className="viewer-controls">
         <button onClick={() => changeSelection(-1)}>Prev</button>
         <button onClick={() => changeSelection(1)}>Next</button>
       </div>
-      {selectedItem && (
-        <div className="detail">
-          <div className="panel-subheader">{selectedItem.project} — {selectedItem.filename}</div>
-          <div className="subtle">{selectedItem.relpath}</div>
-          <img src={imageSrc(selectedItem)} alt={selectedItem.id} loading="lazy" />
-          <div className="subtle">{selectedItem.prompts || 'No metadata available'}</div>
+      <div className="subtle">{loading ? 'Loading archives…' : `Showing ${items.length} of ${total || items.length}`}</div>
+    </div>
+  )
+
+  const detailPanel = (
+    <div className="archive-panel" style={{ flexBasis: layout.gridFirst ? `calc(100% - var(--split))` : 'var(--split)' }}>
+      <div className="panel-body detail-body">
+        {selectedItem && (
+          <>
+            <div className="panel-subheader">{selectedItem.project} — {selectedItem.filename}</div>
+            <div className="subtle">{selectedItem.relpath}</div>
+            <img src={imageSrc(selectedItem)} alt={selectedItem.id} loading="lazy" />
+            <div className="subtle">{selectedItem.prompts || 'No metadata available'}</div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+
+  const panels = layout.gridFirst ? (
+    <>
+      {gridPanel}
+      <div className="splitter" onMouseDown={startDrag} />
+      {detailPanel}
+    </>
+  ) : (
+    <>
+      {detailPanel}
+      <div className="splitter" onMouseDown={startDrag} />
+      {gridPanel}
+    </>
+  )
+
+  return (
+    <div className="glass-card archive-card" ref={splitRef}>
+      <div className="panel-header">Archive Viewer</div>
+      <div className="archive-toolbar">
+        <div className="dual">
+          <label>
+            Project
+            <select value={project} onChange={(e) => setProject(e.target.value)}>
+              <option value="">All Projects</option>
+              {projects.map((p) => (
+                <option key={p.name} value={p.name}>{`${p.name} (${p.count})`}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Search
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filename contains" />
+          </label>
         </div>
-      )}
+        <div className="layout-actions">
+          <button className="ghost" onClick={swapPanels}>Swap Panels</button>
+          <button className="ghost" onClick={resetLayout}>Reset</button>
+          <button className="ghost" onClick={saveDefaults}>Save as Default</button>
+          <label className="color-picker">
+            Select border
+            <input type="color" value={layout.selColor} onChange={handleColorChange} />
+          </label>
+        </div>
+      </div>
+
+      <div className="archive-panels" style={{ '--split': `${layout.split}%` }}>
+        {panels}
+      </div>
     </div>
   )
 }
 
 export default function App() {
   const [settings, setSettings] = useState(defaultGlass)
+  const [activeTab, setActiveTab] = useState('generator')
 
   return (
     <div className="app-shell">
@@ -696,17 +796,31 @@ export default function App() {
           <h1>NAI Studio Web</h1>
           <p>FastAPI + React remake with premium dark glassmorphism.</p>
         </header>
-        <div className="top-layout">
-          <div className="card-column">
-            <GeneratorPanel />
-          </div>
-          <div className="card-column">
-            <GlassSettings settings={settings} setSettings={setSettings} />
-          </div>
+        <div className="tab-bar">
+          <button className={activeTab === 'generator' ? 'active' : ''} onClick={() => setActiveTab('generator')}>
+            Generator
+          </button>
+          <button className={activeTab === 'archive' ? 'active' : ''} onClick={() => setActiveTab('archive')}>
+            Archive
+          </button>
         </div>
-        <div className="archive-row">
-          <ArchiveViewer />
-        </div>
+
+        {activeTab === 'generator' && (
+          <div className="top-layout">
+            <div className="card-column">
+              <GeneratorPanel />
+            </div>
+            <div className="card-column">
+              <GlassSettings settings={settings} setSettings={setSettings} />
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'archive' && (
+          <div className="archive-tab">
+            <ArchiveViewer />
+          </div>
+        )}
       </div>
     </div>
   )
