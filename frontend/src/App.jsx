@@ -407,7 +407,7 @@ function ArchiveViewer() {
     return buildTicks(matrix.yMin, matrix.yMax, matrix.yStep)
   }, [matrix.autoY, matrix.yMax, matrix.yMin, matrix.yStep, parsedItems, yParamKey])
 
-  const { matrixCells, orderedMatrixItems } = useMemo(() => {
+  const { matrixCells, orderedMatrixItems, idToCoords } = useMemo(() => {
     const mapping = new Map()
     parsedItems.forEach((item) => {
       const xVal = nearestTick(item.params?.[xParamKey], xTicks, matrix.xStep)
@@ -419,20 +419,25 @@ function ArchiveViewer() {
 
     const cells = []
     const order = []
+    const coordMap = new Map()
     yTicks.forEach((yVal) => {
       xTicks.forEach((xVal) => {
         const key = `${yVal}|${xVal}`
         const item = mapping.get(key) || null
         cells.push({ key, xVal, yVal, item })
-        if (item) order.push(item)
+        if (item) {
+          order.push(item)
+          coordMap.set(item.id, { x: xVal, y: yVal })
+        }
       })
     })
 
-    return { matrixCells: cells, orderedMatrixItems: order }
+    return { matrixCells: cells, orderedMatrixItems: order, idToCoords: coordMap }
   }, [parsedItems, xParamKey, xTicks, yParamKey, yTicks, matrix.xStep, matrix.yStep])
 
   const displayOrder = viewMode === 'matrix' ? orderedMatrixItems : items
   const selectedItem = displayOrder.find((i) => i.id === selectedId) || displayOrder[0] || null
+  const [activeCoords, setActiveCoords] = useState({ x: null, y: null })
 
   const changeSelection = (delta) => {
     if (!displayOrder.length) return
@@ -442,6 +447,12 @@ function ArchiveViewer() {
       return displayOrder[nextIdx].id
     })
   }
+
+  useEffect(() => {
+    if (selectedItem && idToCoords.has(selectedItem.id)) {
+      setActiveCoords(idToCoords.get(selectedItem.id))
+    }
+  }, [idToCoords, selectedItem])
 
   useEffect(() => {
     const handler = (e) => {
@@ -523,6 +534,9 @@ function ArchiveViewer() {
               </label>
             </div>
             <div className="subtle">Matrix cells built from filename tokens like "--G7.0_R0.7".</div>
+            {activeCoords.x !== null && activeCoords.y !== null && (
+              <div className="matrix-badge">Now viewing: {matrix.xParam}={activeCoords.x}, {matrix.yParam}={activeCoords.y}</div>
+            )}
           </div>
         )}
       </div>
@@ -545,33 +559,49 @@ function ArchiveViewer() {
 
       {viewMode === 'matrix' && (
         <div className="matrix-wrapper">
-          <div className="matrix-grid" style={{ gridTemplateColumns: `auto repeat(${xTicks.length}, minmax(120px, 1fr))` }}>
-            <div className="matrix-corner" />
-            {xTicks.map((x) => (
-              <div key={`x-${x}`} className="matrix-header">{x}</div>
-            ))}
-            {yTicks.map((y) => (
-              <React.Fragment key={`row-${y}`}>
-                <div className="matrix-header">{y}</div>
-                {xTicks.map((x) => {
-                  const cell = matrixCells.find((c) => c.xVal === x && c.yVal === y)
-                  return (
-                    <div key={`${y}-${x}`} className="matrix-cell">
-                      {cell?.item ? (
-                        <button
-                          className={`thumb ${cell.item.id === selectedId ? 'active' : ''}`}
-                          onClick={() => setSelectedId(cell.item.id)}
-                        >
-                          <img src={thumbSrc(cell.item)} alt={cell.item.id} loading="lazy" />
-                        </button>
-                      ) : (
-                        <div className="matrix-placeholder">—</div>
-                      )}
-                    </div>
-                  )
-                })}
-              </React.Fragment>
-            ))}
+          <div className="matrix-scroller">
+            <div className="matrix-grid" style={{ gridTemplateColumns: `auto repeat(${xTicks.length}, 140px)` }}>
+              <div className="matrix-corner sticky-corner" />
+              {xTicks.map((x) => (
+                <div
+                  key={`x-${x}`}
+                  className={`matrix-header x-header ${activeCoords.x === x ? 'active-axis' : ''}`}
+                >
+                  {x}
+                </div>
+              ))}
+              {yTicks.map((y) => (
+                <React.Fragment key={`row-${y}`}>
+                  <div className={`matrix-header y-header ${activeCoords.y === y ? 'active-axis' : ''}`}>{y}</div>
+                  {xTicks.map((x) => {
+                    const cell = matrixCells.find((c) => c.xVal === x && c.yVal === y)
+                    const isActive = activeCoords.x === x && activeCoords.y === y
+                    const sameX = activeCoords.x === x
+                    const sameY = activeCoords.y === y
+                    return (
+                      <div
+                        key={`${y}-${x}`}
+                        className={`matrix-cell ${isActive ? 'active-cell' : ''} ${sameX ? 'axis-x' : ''} ${sameY ? 'axis-y' : ''}`}
+                      >
+                        {cell?.item ? (
+                          <button
+                            className={`thumb ${cell.item.id === selectedId ? 'active' : ''}`}
+                            onClick={() => {
+                              setSelectedId(cell.item.id)
+                              setActiveCoords({ x, y })
+                            }}
+                          >
+                            <img src={thumbSrc(cell.item)} alt={cell.item.id} loading="lazy" />
+                          </button>
+                        ) : (
+                          <div className="matrix-placeholder">—</div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </React.Fragment>
+              ))}
+            </div>
           </div>
         </div>
       )}
