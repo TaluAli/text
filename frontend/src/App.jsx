@@ -25,6 +25,8 @@ const defaultGlass = {
 }
 
 const MAX_SWEEP_IMAGES = 500
+const FORM_STORAGE_KEY = 'generatorFormState'
+const JOB_STORAGE_KEY = 'generatorJobState'
 
 function applyGlassVars(settings) {
   const root = document.documentElement
@@ -435,6 +437,73 @@ function GeneratorPanel({ onGenerated }) {
   const [rStep, setRStep] = useState(0.1)
   const [jobInfo, setJobInfo] = useState({ jobId: null, total: 0, done: 0, status: '', current_g: null, current_r: null })
   const pollRef = useRef(null)
+  const formSaveRef = useRef(null)
+  const restoredRef = useRef(false)
+
+  useEffect(() => {
+    if (restoredRef.current) return
+    restoredRef.current = true
+    try {
+      const raw = window.localStorage.getItem(FORM_STORAGE_KEY)
+      if (raw) {
+        const saved = JSON.parse(raw)
+        if (saved.basePrompt !== undefined) setBasePrompt(saved.basePrompt)
+        if (saved.char1 !== undefined) setChar1(saved.char1)
+        if (saved.char2 !== undefined) setChar2(saved.char2)
+        if (saved.negativePrompt !== undefined) setNegativePrompt(saved.negativePrompt)
+        if (saved.guidance !== undefined) setGuidance(saved.guidance)
+        if (saved.rescale !== undefined) setRescale(saved.rescale)
+        if (saved.width !== undefined) setWidth(saved.width)
+        if (saved.height !== undefined) setHeight(saved.height)
+        if (saved.seed !== undefined) setSeed(saved.seed)
+        if (saved.modelName !== undefined) setModelName(saved.modelName)
+        if (saved.project !== undefined) setProject(saved.project)
+        if (saved.mode !== undefined) setMode(saved.mode)
+        if (saved.gStart !== undefined) setGStart(saved.gStart)
+        if (saved.gEnd !== undefined) setGEnd(saved.gEnd)
+        if (saved.gStep !== undefined) setGStep(saved.gStep)
+        if (saved.rStart !== undefined) setRStart(saved.rStart)
+        if (saved.rEnd !== undefined) setREnd(saved.rEnd)
+        if (saved.rStep !== undefined) setRStep(saved.rStep)
+      }
+    } catch (err) {
+      /* ignore restore errors */
+    }
+  }, [])
+
+  useEffect(() => {
+    if (formSaveRef.current) clearTimeout(formSaveRef.current)
+    formSaveRef.current = setTimeout(() => {
+      const payload = {
+        basePrompt,
+        char1,
+        char2,
+        negativePrompt,
+        guidance,
+        rescale,
+        width,
+        height,
+        seed,
+        modelName,
+        project,
+        mode,
+        gStart,
+        gEnd,
+        gStep,
+        rStart,
+        rEnd,
+        rStep,
+      }
+      try {
+        window.localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(payload))
+      } catch (err) {
+        /* ignore storage errors */
+      }
+    }, 250)
+    return () => {
+      if (formSaveRef.current) clearTimeout(formSaveRef.current)
+    }
+  }, [basePrompt, char1, char2, negativePrompt, guidance, rescale, width, height, seed, modelName, project, mode, gStart, gEnd, gStep, rStart, rEnd, rStep])
 
   const gValues = useMemo(() => buildSweepRange(Number(gStart), Number(gEnd), Number(gStep)), [gStart, gEnd, gStep])
   const rValues = useMemo(() => buildSweepRange(Number(rStart), Number(rEnd), Number(rStep)), [rStart, rEnd, rStep])
@@ -504,7 +573,7 @@ function GeneratorPanel({ onGenerated }) {
           return
         }
         const data = await res.json()
-        setJobInfo((info) => ({ ...info, ...data, jobId }))
+        setJobInfo((info) => ({ ...info, ...data, jobId, started_at: info.started_at || Date.now() }))
         setStatus(`${data.status} ${data.done}/${data.total}`)
         if (data.status === 'done' || data.status === 'error' || data.status === 'cancelled') {
           setLoading(false)
@@ -519,6 +588,44 @@ function GeneratorPanel({ onGenerated }) {
     },
     [],
   )
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(JOB_STORAGE_KEY)
+      if (raw) {
+        const saved = JSON.parse(raw)
+        if (saved?.jobId) {
+          setMode('sweep')
+          setJobInfo(saved)
+          setStatus('Reattaching job...')
+          setLoading(true)
+          pollJob(saved.jobId)
+        }
+      }
+    } catch (err) {
+      /* ignore */
+    }
+  }, [pollJob])
+
+  useEffect(() => {
+    if (!jobInfo?.jobId) {
+      window.localStorage.removeItem(JOB_STORAGE_KEY)
+      return
+    }
+    const terminal = jobInfo.status === 'done' || jobInfo.status === 'error' || jobInfo.status === 'cancelled'
+    if (terminal) {
+      window.localStorage.removeItem(JOB_STORAGE_KEY)
+      return
+    }
+    try {
+      window.localStorage.setItem(
+        JOB_STORAGE_KEY,
+        JSON.stringify({ ...jobInfo, started_at: jobInfo.started_at || Date.now() }),
+      )
+    } catch (err) {
+      /* ignore */
+    }
+  }, [jobInfo])
 
   const startSweep = async () => {
     if (totalSweep === 0) {
@@ -554,7 +661,15 @@ function GeneratorPanel({ onGenerated }) {
         throw new Error(msg)
       }
       const data = await res.json()
-      setJobInfo({ jobId: data.job_id, total: data.total, done: 0, status: 'queued', current_g: null, current_r: null })
+      setJobInfo({
+        jobId: data.job_id,
+        total: data.total,
+        done: 0,
+        status: 'queued',
+        current_g: null,
+        current_r: null,
+        started_at: Date.now(),
+      })
       pollJob(data.job_id)
     } catch (err) {
       setStatus('Error starting sweep')
@@ -562,10 +677,12 @@ function GeneratorPanel({ onGenerated }) {
     }
   }
 
-  useEffect(() => () => clearPoll(), [])
+  useEffect(() => {
+    return () => clearPoll()
+  }, [])
 
-    return (
-      <div className="glass-card">
+  return (
+    <div className="glass-card">
       <div className="panel-header">Generator</div>
       <div className="grid-two">
         <div>
@@ -674,6 +791,7 @@ function GeneratorPanel({ onGenerated }) {
                     await fetch(`${API_BASE}/api/jobs/${jobInfo.jobId}/cancel`, { method: 'POST' })
                     setStatus('Cancelled')
                     setLoading(false)
+                    setJobInfo((info) => ({ ...info, status: 'cancelled' }))
                   }}
                 >
                   Cancel
@@ -686,6 +804,7 @@ function GeneratorPanel({ onGenerated }) {
               <div className="progress-bar">
                 <div className="fill" style={{ width: `${jobInfo.total ? Math.round((jobInfo.done / jobInfo.total) * 100) : 0}%` }} />
               </div>
+              <div className="subtle">Job: {jobInfo.jobId}</div>
               <div className="subtle">{status}</div>
               {jobInfo.current_g !== null && jobInfo.current_r !== null && (
                 <div className="subtle">Current G {formatTick(jobInfo.current_g)} / R {formatTick(jobInfo.current_r)}</div>
@@ -1231,7 +1350,7 @@ export default function App() {
           </button>
         </div>
 
-        {activeTab === 'generator' && (
+        <div className={`tab-panel ${activeTab === 'generator' ? 'active' : 'hidden'}`}>
           <div className="top-layout">
             <div className="card-column">
               <GeneratorPanel />
@@ -1240,13 +1359,13 @@ export default function App() {
               <GlassSettings settings={settings} setSettings={setSettings} />
             </div>
           </div>
-        )}
+        </div>
 
-        {activeTab === 'archive' && (
+        <div className={`tab-panel ${activeTab === 'archive' ? 'active' : 'hidden'}`}>
           <div className="archive-tab">
             <ArchiveViewer />
           </div>
-        )}
+        </div>
       </div>
     </div>
   )

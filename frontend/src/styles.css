@@ -291,3 +291,5 @@ button.ghost { background: rgba(255,255,255,0.08); }
 .tab-bar { display: flex; gap: 10px; margin: 16px 0; }
 .tab-bar button { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); }
 .tab-bar button.active { border-color: rgba(140,200,255,0.8); box-shadow: 0 0 0 1px rgba(140,200,255,0.5); }
+.tab-panel { width: 100%; min-width: 0; }
+.tab-panel.hidden { display: none; }
