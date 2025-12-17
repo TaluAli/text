@@ -188,6 +188,87 @@ button.ghost { background: rgba(255,255,255,0.08); }
 .detail-image-wrap { width: 100%; flex: 1; min-height: 0; min-width: 0; overflow: auto; display: flex; align-items: center; justify-content: center; }
 .detail-image-wrap img { width: 100%; height: 100%; max-height: 100%; object-fit: contain; border-radius: 12px; }
 
+.lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.lightbox-shell {
+  width: min(96vw, 1800px);
+  max-height: 92vh;
+  background: rgba(12, 14, 20, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 18px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255,255,255,0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lightbox-header,
+.lightbox-footer {
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: rgba(10, 12, 18, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lightbox-footer {
+  border-bottom: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.caption { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.caption-main { font-weight: 700; }
+.caption-sub { color: var(--text-secondary); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.lightbox-actions, .lightbox-nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.lightbox-viewport {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: radial-gradient(circle at 20% 30%, rgba(120, 180, 255, 0.08), transparent 50%),
+              radial-gradient(circle at 70% 70%, rgba(200, 120, 255, 0.07), transparent 52%),
+              rgba(6, 8, 12, 0.8);
+  overflow: hidden;
+  cursor: grab;
+}
+
+.lightbox-viewport:active { cursor: grabbing; }
+
+.lightbox-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.lightbox-stage img {
+  display: block;
+  max-width: 95vw;
+  max-height: 90vh;
+  width: auto;
+  height: auto;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  user-select: none;
+  pointer-events: none;
+}
+
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
   .right-column { position: static; }

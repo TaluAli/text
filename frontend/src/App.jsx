@@ -107,6 +107,10 @@ function buildSweepRange(start, end, step) {
   return values
 }
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value))
+}
+
 function nearestTick(value, ticks, step) {
   if (value === null || value === undefined || !ticks.length) return null
   let best = ticks[0]
@@ -127,6 +131,217 @@ function uniqueSorted(values = []) {
   return Array.from(new Set(values.filter((v) => v !== null && v !== undefined)))
     .map((v) => Number(v))
     .sort((a, b) => a - b)
+}
+
+function LightboxModal({ item, src, onClose, onPrev, onNext }) {
+  const containerRef = useRef(null)
+  const imgRef = useRef(null)
+  const [zoom, setZoom] = useState(1)
+  const [baseScale, setBaseScale] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 })
+  const dragState = useRef({ active: false, startX: 0, startY: 0, panX: 0, panY: 0 })
+
+  const clampPan = useCallback(
+    (px, py, scaleFactor) => {
+      if (!containerRef.current || !naturalSize.w || !naturalSize.h) return { x: px, y: py }
+      const rect = containerRef.current.getBoundingClientRect()
+      const scaledW = naturalSize.w * scaleFactor
+      const scaledH = naturalSize.h * scaleFactor
+      const margin = 32
+
+      const computeBounds = (containerLength, scaledLength, naturalLength) => {
+        if (scaledLength <= containerLength) {
+          const center = (containerLength - scaledLength) / (2 * scaleFactor)
+          return { min: center, max: center }
+        }
+        const max = margin / scaleFactor
+        const min = containerLength / scaleFactor - naturalLength - margin / scaleFactor
+        return { min, max }
+      }
+
+      const xBounds = computeBounds(rect.width, scaledW, naturalSize.w)
+      const yBounds = computeBounds(rect.height, scaledH, naturalSize.h)
+      return {
+        x: clamp(px, xBounds.min, xBounds.max),
+        y: clamp(py, yBounds.min, yBounds.max),
+      }
+    },
+    [naturalSize.h, naturalSize.w],
+  )
+
+  const fitImage = useCallback(() => {
+    if (!containerRef.current || !imgRef.current || !naturalSize.w || !naturalSize.h) return
+    const rect = containerRef.current.getBoundingClientRect()
+    const fit = Math.min(rect.width / naturalSize.w, rect.height / naturalSize.h, 1)
+    setBaseScale(fit)
+    const centered = {
+      x: (rect.width - naturalSize.w * fit) / (2 * fit),
+      y: (rect.height - naturalSize.h * fit) / (2 * fit),
+    }
+    setPan(centered)
+    setZoom(1)
+  }, [naturalSize.h, naturalSize.w])
+
+  useEffect(() => {
+    if (!item) return undefined
+    const original = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = original
+    }
+  }, [item])
+
+  useEffect(() => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }, [src])
+
+  useEffect(() => {
+    if (!containerRef.current) return undefined
+    const observer = new ResizeObserver(() => fitImage())
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [fitImage])
+
+  const applyZoom = (nextZoom, center) => {
+    const minZoom = 1
+    const maxZoom = 6
+    const clampedZoom = clamp(nextZoom, minZoom, maxZoom)
+    if (!imgRef.current || !containerRef.current) {
+      setZoom(clampedZoom)
+      return
+    }
+    const rect = imgRef.current.getBoundingClientRect()
+    const oldScale = baseScale * zoom
+    const newScale = baseScale * clampedZoom
+    const cx = center ? center.x : rect.width / 2
+    const cy = center ? center.y : rect.height / 2
+    const nextPanX = pan.x + cx * (1 / newScale - 1 / oldScale)
+    const nextPanY = pan.y + cy * (1 / newScale - 1 / oldScale)
+    const clampedPan = clampPan(nextPanX, nextPanY, newScale)
+    setPan(clampedPan)
+    setZoom(clampedZoom)
+  }
+
+  const handleWheel = (e) => {
+    e.preventDefault()
+    const delta = -e.deltaY * 0.0015
+    applyZoom(zoom * (1 + delta), { x: e.clientX - (imgRef.current?.getBoundingClientRect().left || 0), y: e.clientY - (imgRef.current?.getBoundingClientRect().top || 0) })
+  }
+
+  const handleDoubleClick = (e) => {
+    e.preventDefault()
+    const targetZoom = zoom > 1.05 ? 1 : 2.2
+    applyZoom(targetZoom, { x: e.clientX - (imgRef.current?.getBoundingClientRect().left || 0), y: e.clientY - (imgRef.current?.getBoundingClientRect().top || 0) })
+  }
+
+  const endDrag = () => {
+    dragState.current.active = false
+  }
+
+  const handlePointerDown = (e) => {
+    if (!imgRef.current) return
+    e.preventDefault()
+    imgRef.current.setPointerCapture(e.pointerId)
+    dragState.current = {
+      active: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      panX: pan.x,
+      panY: pan.y,
+    }
+  }
+
+  const handlePointerMove = (e) => {
+    if (!dragState.current.active) return
+    const scaleFactor = baseScale * zoom
+    const dx = (e.clientX - dragState.current.startX) / scaleFactor
+    const dy = (e.clientY - dragState.current.startY) / scaleFactor
+    const nextX = dragState.current.panX + dx
+    const nextY = dragState.current.panY + dy
+    setPan(clampPan(nextX, nextY, scaleFactor))
+  }
+
+  const handleKey = useCallback(
+    (e) => {
+      if (!item) return
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose?.()
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        onPrev?.()
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        onNext?.()
+      }
+    },
+    [item, onClose, onNext, onPrev],
+  )
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [handleKey])
+
+  if (!item) return null
+
+  return (
+    <div className="lightbox-backdrop" onClick={onClose}>
+      <div className="lightbox-shell" onClick={(e) => e.stopPropagation()}>
+        <div className="lightbox-header">
+          <div className="caption">
+            <div className="caption-main">{item.filename || item.relpath || 'Image'}</div>
+            {item.relpath ? <div className="caption-sub">{item.relpath}</div> : null}
+          </div>
+          <div className="lightbox-actions">
+            <button className="ghost" onClick={() => applyZoom(zoom * 1.15)} aria-label="Zoom in">+</button>
+            <button className="ghost" onClick={() => applyZoom(zoom / 1.15)} aria-label="Zoom out">−</button>
+            <button className="ghost" onClick={() => applyZoom(1)} aria-label="Reset zoom">Reset</button>
+            <button className="ghost" onClick={onClose} aria-label="Close">×</button>
+          </div>
+        </div>
+        <div
+          className="lightbox-viewport"
+          ref={containerRef}
+          onWheel={handleWheel}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onDoubleClick={handleDoubleClick}
+        >
+          <div
+            className="lightbox-stage"
+            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${baseScale * zoom})` }}
+          >
+            <img
+              ref={imgRef}
+              src={src}
+              alt={item.filename || 'selected'}
+              draggable={false}
+              onLoad={(e) => {
+                const naturalW = e.target.naturalWidth || 1
+                const naturalH = e.target.naturalHeight || 1
+                setNaturalSize({ w: naturalW, h: naturalH })
+                fitImage()
+              }}
+            />
+          </div>
+        </div>
+        <div className="lightbox-footer">
+          <div className="subtle">Scroll to zoom, drag to pan, double-click to toggle zoom.</div>
+          <div className="lightbox-nav">
+            <button className="ghost" onClick={onPrev} aria-label="Previous">← Prev</button>
+            <button className="ghost" onClick={onNext} aria-label="Next">Next →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function GlassSettings({ settings, setSettings }) {
@@ -509,6 +724,7 @@ function ArchiveViewer() {
   const [activeCoords, setActiveCoords] = useState({ x: null, y: null })
   const [layout, setLayout] = useState(loadLayoutDefaults)
   const layoutDefaults = useRef(loadLayoutDefaults())
+  const [lightboxOpen, setLightboxOpen] = useState(false)
   const pageSize = 200
   const matrixWrapperRef = useRef(null)
   const splitRef = useRef(null)
@@ -674,6 +890,7 @@ function ArchiveViewer() {
 
   const displayOrder = viewMode === 'matrix' ? orderedMatrixItems : items
   const selectedItem = displayOrder.find((i) => i.id === selectedId) || displayOrder[0] || null
+  const selectedSrc = selectedItem ? imageSrc(selectedItem) : ''
 
   const changeSelection = (delta) => {
     if (!displayOrder.length) return
@@ -904,7 +1121,13 @@ function ArchiveViewer() {
             <div className="panel-subheader">{selectedItem.project} — {selectedItem.filename}</div>
             <div className="subtle">{selectedItem.relpath}</div>
             <div className="detail-image-wrap">
-              <img src={imageSrc(selectedItem)} alt={selectedItem.id} loading="lazy" />
+              <img
+                src={selectedSrc}
+                alt={selectedItem.id}
+                loading="lazy"
+                onClick={() => setLightboxOpen(true)}
+                style={{ cursor: 'zoom-in' }}
+              />
             </div>
             <textarea
               className="detail-meta"
@@ -932,39 +1155,50 @@ function ArchiveViewer() {
   )
 
   return (
-    <div className="glass-card archive-card" ref={splitRef}>
-      <div className="panel-header">Archive Viewer</div>
-      <div className="archive-toolbar">
-        <div className="dual">
-          <label>
-            Project
-            <select value={project} onChange={(e) => setProject(e.target.value)}>
-              <option value="">All Projects</option>
-              {projects.map((p) => (
-                <option key={p.name} value={p.name}>{`${p.name} (${p.count})`}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Search
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filename contains" />
-          </label>
+    <>
+      <div className="glass-card archive-card" ref={splitRef}>
+        <div className="panel-header">Archive Viewer</div>
+        <div className="archive-toolbar">
+          <div className="dual">
+            <label>
+              Project
+              <select value={project} onChange={(e) => setProject(e.target.value)}>
+                <option value="">All Projects</option>
+                {projects.map((p) => (
+                  <option key={p.name} value={p.name}>{`${p.name} (${p.count})`}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Search
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filename contains" />
+            </label>
+          </div>
+          <div className="layout-actions">
+            <button className="ghost" onClick={swapPanels}>Swap Panels</button>
+            <button className="ghost" onClick={resetLayout}>Reset</button>
+            <button className="ghost" onClick={saveDefaults}>Save as Default</button>
+            <label className="color-picker">
+              Select border
+              <input type="color" value={layout.selColor} onChange={handleColorChange} />
+            </label>
+          </div>
         </div>
-        <div className="layout-actions">
-          <button className="ghost" onClick={swapPanels}>Swap Panels</button>
-          <button className="ghost" onClick={resetLayout}>Reset</button>
-          <button className="ghost" onClick={saveDefaults}>Save as Default</button>
-          <label className="color-picker">
-            Select border
-            <input type="color" value={layout.selColor} onChange={handleColorChange} />
-          </label>
-        </div>
-      </div>
 
-      <div className="archive-panels" style={{ '--split': `${layout.split}%` }}>
-        {panels}
+        <div className="archive-panels" style={{ '--split': `${layout.split}%` }}>
+          {panels}
+        </div>
       </div>
-    </div>
+      {lightboxOpen && selectedItem ? (
+        <LightboxModal
+          item={selectedItem}
+          src={selectedSrc}
+          onClose={() => setLightboxOpen(false)}
+          onPrev={() => changeSelection(-1)}
+          onNext={() => changeSelection(1)}
+        />
+      ) : null}
+    </>
   )
 }
 
