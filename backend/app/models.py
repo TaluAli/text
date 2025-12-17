@@ -74,3 +74,38 @@ class GenerateResponse(BaseModel):
     id: str
     image_url: str
     meta: ImageMeta
+
+
+class SweepRange(BaseModel):
+    start: float
+    end: float
+    step: float
+
+
+class GenerateSweepRequest(BaseModel):
+    model_name: Optional[str]
+    base_prompt: Optional[str] = ""
+    char1: Optional[str] = ""
+    char2: Optional[str] = ""
+    negative_prompt: Optional[str] = ""
+    guidance: SweepRange
+    rescale: SweepRange
+    width: int = 832
+    height: int = 1216
+    seed: int = 1234567890
+    project: str = "default"
+
+
+class GenerateSweepResponse(BaseModel):
+    job_id: str
+    total: int
+
+
+class JobStatus(BaseModel):
+    status: str
+    done: int
+    total: int
+    current_g: Optional[float] = None
+    current_r: Optional[float] = None
+    current_filename: Optional[str] = None
+    error: Optional[str] = None

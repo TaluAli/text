@@ -111,6 +111,16 @@ button.ghost { background: rgba(255,255,255,0.08); }
 
 .code-block textarea { width: 100%; min-height: 180px; background: rgba(0,0,0,0.35); color: var(--text-primary); border-radius: 12px; border: 1px solid rgba(255,255,255,0.16); }
 .code-block button { margin-top: 8px; }
+.mode-toggle { display: inline-flex; gap: 8px; margin-bottom: 10px; }
+.mode-toggle button { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14); }
+.mode-toggle button.active { border-color: rgba(140,200,255,0.9); box-shadow: 0 0 0 1px rgba(140,200,255,0.5); }
+.sweep-grid { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); }
+.counts { font-weight: 600; }
+.warning { color: #ffb37a; font-weight: 700; }
+.sweep-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.progress-block { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.progress-bar { width: 100%; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); height: 10px; }
+.progress-bar .fill { height: 100%; background: linear-gradient(90deg, rgba(120,200,255,0.8), rgba(90,160,255,0.8)); }
 
 .thumb { border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 4px; background: rgba(0,0,0,0.3); width: 100%; display: block; }
 .thumb img { width: 100%; height: auto; border-radius: 10px; display: block; }

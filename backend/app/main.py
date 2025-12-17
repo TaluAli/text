@@ -10,12 +10,16 @@ from app.models import (
     ArchiveResponse,
     GenerateRequest,
     GenerateResponse,
+    GenerateSweepRequest,
+    GenerateSweepResponse,
     ImageMeta,
+    JobStatus,
     ProjectsResponse,
     TokenRequest,
     TokenResponse,
 )
 from app.services import archive as archive_service
+from app.services import jobs as job_service
 from app.services.novelai import generate_image
 
 app = FastAPI(title="NAI Studio Web")
@@ -93,6 +97,31 @@ def generate(req: GenerateRequest, token: str = Depends(_require_token)):
         image_url=meta.image_url,
         meta=meta,
     )
+
+
+@app.post("/api/generate_sweep", response_model=GenerateSweepResponse)
+def generate_sweep(req: GenerateSweepRequest, token: str = Depends(_require_token)):
+    try:
+        job = job_service.create_sweep_job(req, token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return GenerateSweepResponse(job_id=job.id, total=job.total)
+
+
+@app.get("/api/jobs/{job_id}", response_model=JobStatus)
+def job_status(job_id: str):
+    status = job_service.get_job(job_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return status
+
+
+@app.post("/api/jobs/{job_id}/cancel", response_model=JobStatus)
+def cancel_job(job_id: str):
+    status = job_service.cancel_job(job_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return status
 
 
 @app.get("/api/archives", response_model=ArchiveResponse)

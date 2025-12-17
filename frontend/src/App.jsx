@@ -24,6 +24,8 @@ const defaultGlass = {
   inset: 0.9,
 }
 
+const MAX_SWEEP_IMAGES = 500
+
 function applyGlassVars(settings) {
   const root = document.documentElement
   root.style.setProperty('--glass-blur', `${settings.blur}px`)
@@ -94,6 +96,15 @@ function buildTicks(min, max, step) {
     ticks.push(Number(v.toFixed(4)))
   }
   return ticks
+}
+
+function buildSweepRange(start, end, step) {
+  if (step <= 0 || end < start) return []
+  const values = []
+  for (let v = start; v <= end + 1e-9; v += step) {
+    values.push(Number(v.toFixed(1)))
+  }
+  return values
 }
 
 function nearestTick(value, ticks, step) {
@@ -193,6 +204,19 @@ function GeneratorPanel({ onGenerated }) {
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState('')
   const [preview, setPreview] = useState(null)
+  const [mode, setMode] = useState('single')
+  const [gStart, setGStart] = useState(4.0)
+  const [gEnd, setGEnd] = useState(4.5)
+  const [gStep, setGStep] = useState(0.1)
+  const [rStart, setRStart] = useState(0.0)
+  const [rEnd, setREnd] = useState(0.7)
+  const [rStep, setRStep] = useState(0.1)
+  const [jobInfo, setJobInfo] = useState({ jobId: null, total: 0, done: 0, status: '', current_g: null, current_r: null })
+  const pollRef = useRef(null)
+
+  const gValues = useMemo(() => buildSweepRange(Number(gStart), Number(gEnd), Number(gStep)), [gStart, gEnd, gStep])
+  const rValues = useMemo(() => buildSweepRange(Number(rStart), Number(rEnd), Number(rStep)), [rStart, rEnd, rStep])
+  const totalSweep = gValues.length * rValues.length
 
   const setToken = async () => {
     if (!tokenInput.trim()) return
@@ -202,6 +226,13 @@ function GeneratorPanel({ onGenerated }) {
       body: JSON.stringify({ token: tokenInput }),
     })
     setTokenStatus('Token stored (in-memory)')
+  }
+
+  const clearPoll = () => {
+    if (pollRef.current) {
+      clearTimeout(pollRef.current)
+      pollRef.current = null
+    }
   }
 
   const doGenerate = async () => {
@@ -240,6 +271,76 @@ function GeneratorPanel({ onGenerated }) {
       setLoading(false)
     }
   }
+
+  const pollJob = useCallback(
+    async (jobId) => {
+      try {
+        const res = await fetch(`${API_BASE}/api/jobs/${jobId}`)
+        if (!res.ok) {
+          setStatus('Job not found')
+          clearPoll()
+          return
+        }
+        const data = await res.json()
+        setJobInfo((info) => ({ ...info, ...data, jobId }))
+        setStatus(`${data.status} ${data.done}/${data.total}`)
+        if (data.status === 'done' || data.status === 'error' || data.status === 'cancelled') {
+          setLoading(false)
+          clearPoll()
+        } else {
+          pollRef.current = setTimeout(() => pollJob(jobId), 1000)
+        }
+      } catch (err) {
+        setStatus('Job polling failed')
+        clearPoll()
+      }
+    },
+    [],
+  )
+
+  const startSweep = async () => {
+    if (totalSweep === 0) {
+      setStatus('No sweep values')
+      return
+    }
+    if (totalSweep > MAX_SWEEP_IMAGES) {
+      setStatus(`Too many images (${totalSweep}) - cap is ${MAX_SWEEP_IMAGES}`)
+      return
+    }
+    setLoading(true)
+    setStatus('Starting sweep...')
+    try {
+      const res = await fetch(`${API_BASE}/api/generate_sweep`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model_name: modelName,
+          base_prompt: basePrompt,
+          char1,
+          char2,
+          negative_prompt: negativePrompt,
+          guidance: { start: Number(gStart), end: Number(gEnd), step: Number(gStep) },
+          rescale: { start: Number(rStart), end: Number(rEnd), step: Number(rStep) },
+          width: Number(width),
+          height: Number(height),
+          seed: Number(seed),
+          project,
+        }),
+      })
+      if (!res.ok) {
+        const msg = await res.text()
+        throw new Error(msg)
+      }
+      const data = await res.json()
+      setJobInfo({ jobId: data.job_id, total: data.total, done: 0, status: 'queued', current_g: null, current_r: null })
+      pollJob(data.job_id)
+    } catch (err) {
+      setStatus('Error starting sweep')
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => () => clearPoll(), [])
 
     return (
       <div className="glass-card">
@@ -281,14 +382,51 @@ function GeneratorPanel({ onGenerated }) {
           </label>
         </div>
         <div>
-          <div className="dual">
-            <label>Guidance
-              <input type="number" value={guidance} step="0.1" onChange={(e) => setGuidance(e.target.value)} />
-            </label>
-            <label>Rescale
-              <input type="number" value={rescale} step="0.1" onChange={(e) => setRescale(e.target.value)} />
-            </label>
+          <div className="mode-toggle">
+            <button className={mode === 'single' ? 'active' : ''} onClick={() => setMode('single')}>Single</button>
+            <button className={mode === 'sweep' ? 'active' : ''} onClick={() => setMode('sweep')}>Sweep</button>
           </div>
+          {mode === 'single' ? (
+            <div className="dual">
+              <label>Guidance
+                <input type="number" value={guidance} step="0.1" onChange={(e) => setGuidance(e.target.value)} />
+              </label>
+              <label>Rescale
+                <input type="number" value={rescale} step="0.1" onChange={(e) => setRescale(e.target.value)} />
+              </label>
+            </div>
+          ) : (
+            <div className="sweep-grid">
+              <div className="panel-subheader">Guidance Sweep</div>
+              <div className="dual">
+                <label>Start
+                  <input type="number" value={gStart} step="0.1" onChange={(e) => setGStart(e.target.value)} />
+                </label>
+                <label>End
+                  <input type="number" value={gEnd} step="0.1" onChange={(e) => setGEnd(e.target.value)} />
+                </label>
+              </div>
+              <label>Step
+                <input type="number" value={gStep} step="0.1" onChange={(e) => setGStep(e.target.value)} />
+              </label>
+              <div className="panel-subheader">Rescale Sweep</div>
+              <div className="dual">
+                <label>Start
+                  <input type="number" value={rStart} step="0.1" onChange={(e) => setRStart(e.target.value)} />
+                </label>
+                <label>End
+                  <input type="number" value={rEnd} step="0.1" onChange={(e) => setREnd(e.target.value)} />
+                </label>
+              </div>
+              <label>Step
+                <input type="number" value={rStep} step="0.1" onChange={(e) => setRStep(e.target.value)} />
+              </label>
+              <div className="counts subtle">G values: {gValues.length} | R values: {rValues.length} | Total: {totalSweep}</div>
+              {totalSweep > MAX_SWEEP_IMAGES && (
+                <div className="warning">Cap {MAX_SWEEP_IMAGES} images. Adjust ranges.</div>
+              )}
+            </div>
+          )}
           <div className="dual">
             <label>Width
               <input type="number" value={width} onChange={(e) => setWidth(e.target.value)} />
@@ -300,7 +438,38 @@ function GeneratorPanel({ onGenerated }) {
           <label>Seed
             <input type="number" value={seed} onChange={(e) => setSeed(e.target.value)} />
           </label>
-          <button onClick={doGenerate} disabled={loading}>{loading ? 'Working...' : 'Generate'}</button>
+          {mode === 'single' ? (
+            <button onClick={doGenerate} disabled={loading}>{loading ? 'Working...' : 'Generate'}</button>
+          ) : (
+            <div className="sweep-actions">
+              <button onClick={startSweep} disabled={loading || totalSweep === 0 || totalSweep > MAX_SWEEP_IMAGES}>
+                {loading ? 'Working...' : 'Start Sweep'}
+              </button>
+              {jobInfo?.jobId && (
+                <button
+                  className="ghost"
+                  onClick={async () => {
+                    await fetch(`${API_BASE}/api/jobs/${jobInfo.jobId}/cancel`, { method: 'POST' })
+                    setStatus('Cancelled')
+                    setLoading(false)
+                  }}
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          )}
+          {jobInfo?.jobId && (
+            <div className="progress-block">
+              <div className="progress-bar">
+                <div className="fill" style={{ width: `${jobInfo.total ? Math.round((jobInfo.done / jobInfo.total) * 100) : 0}%` }} />
+              </div>
+              <div className="subtle">{status}</div>
+              {jobInfo.current_g !== null && jobInfo.current_r !== null && (
+                <div className="subtle">Current G {formatTick(jobInfo.current_g)} / R {formatTick(jobInfo.current_r)}</div>
+              )}
+            </div>
+          )}
           <div className="status">{status}</div>
           {preview && (
             <div className="preview">
