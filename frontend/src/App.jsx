@@ -140,6 +140,7 @@ function LightboxModal({ item, src, onClose, onPrev, onNext }) {
   const [baseScale, setBaseScale] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 })
+  const [loadError, setLoadError] = useState('')
   const dragState = useRef({ active: false, startX: 0, startY: 0, panX: 0, panY: 0 })
 
   const clampPan = useCallback(
@@ -195,6 +196,7 @@ function LightboxModal({ item, src, onClose, onPrev, onNext }) {
   useEffect(() => {
     setZoom(1)
     setPan({ x: 0, y: 0 })
+    setLoadError('')
   }, [src])
 
   useEffect(() => {
@@ -323,6 +325,10 @@ function LightboxModal({ item, src, onClose, onPrev, onNext }) {
               src={src}
               alt={item.filename || 'selected'}
               draggable={false}
+              onError={(e) => {
+                console.error('Lightbox image failed', e?.target?.src)
+                setLoadError('Failed to load image')
+              }}
               onLoad={(e) => {
                 const naturalW = e.target.naturalWidth || 1
                 const naturalH = e.target.naturalHeight || 1
@@ -330,6 +336,7 @@ function LightboxModal({ item, src, onClose, onPrev, onNext }) {
                 fitImage()
               }}
             />
+            {loadError ? <div className="lightbox-error">{loadError}</div> : null}
           </div>
         </div>
         <div className="lightbox-footer">
