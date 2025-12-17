@@ -1,3 +1,4 @@
+import random
 import threading
 import time
 import uuid
@@ -40,6 +41,7 @@ class SweepJob:
     current_filename: Optional[str] = None
     error: Optional[str] = None
     cancel_event: threading.Event = field(default_factory=threading.Event)
+    current_seed: Optional[int] = None
 
     def to_status(self) -> JobStatus:
         return JobStatus(
@@ -50,6 +52,7 @@ class SweepJob:
             current_r=self.current_r,
             current_filename=self.current_filename,
             error=self.error,
+            current_seed=self.current_seed,
         )
 
 
@@ -68,6 +71,7 @@ def _run_job(job: SweepJob):
         return
 
     seq = 0
+    base_seed = int(req.seed)
     for g in g_values:
         if job.cancel_event.is_set():
             job.status = "cancelled"
@@ -78,7 +82,13 @@ def _run_job(job: SweepJob):
                 return
             job.current_g = g
             job.current_r = r
-            seed_val = int(req.seed) + seq
+            if req.seed_mode == "increment":
+                seed_val = base_seed + seq
+            elif req.seed_mode == "random":
+                seed_val = random.randint(0, 2**31 - 1)
+            else:
+                seed_val = base_seed
+            job.current_seed = seed_val
             img = generate_image(
                 token=job.token,
                 model_name=req.model_name,
@@ -107,6 +117,8 @@ def _run_job(job: SweepJob):
                 "rescale": float(r),
                 "width": req.width,
                 "height": req.height,
+                "seed_base": base_seed,
+                "seed_used": seed_val,
             }
 
             meta = archive_service.save_image_and_meta(
@@ -114,6 +126,8 @@ def _run_job(job: SweepJob):
                 project=req.project,
                 seed=seed_val,
                 payload=payload_meta,
+                seed_base=base_seed,
+                seed_used=seed_val,
             )
             job.done += 1
             job.current_filename = meta.image_url

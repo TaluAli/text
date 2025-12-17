@@ -84,13 +84,22 @@ def build_ids(project: str, seed: int, guidance: float, rescale: float) -> Tuple
     return image_id, file_name
 
 
-def save_image_and_meta(image: Image.Image, project: str, seed: int, payload: Dict) -> ImageMeta:
+def save_image_and_meta(
+    image: Image.Image,
+    project: str,
+    seed: int,
+    payload: Dict,
+    seed_base: Optional[int] = None,
+    seed_used: Optional[int] = None,
+) -> ImageMeta:
     project = sanitize_project(project)
     project_dir = ensure_dirs(project)
 
+    effective_seed = seed_used if seed_used is not None else seed
+    base_seed = seed_base if seed_base is not None else seed
     image_id, file_name = build_ids(
         project,
-        seed,
+        effective_seed,
         float(payload.get("guidance", 0)),
         float(payload.get("rescale", 0)),
     )
@@ -104,7 +113,7 @@ def save_image_and_meta(image: Image.Image, project: str, seed: int, payload: Di
         id=image_id,
         project=project,
         created_at=created_at,
-        seed=seed,
+        seed=effective_seed,
         model_name=str(payload.get("model")),
         base_prompt=str(payload.get("input", "")),
         char1=str(payload.get("char1", "")),
@@ -116,6 +125,8 @@ def save_image_and_meta(image: Image.Image, project: str, seed: int, payload: Di
         height=int(payload.get("height", 0)),
         image_url=f"/api/images/{image_id}",
         thumb_url=f"/api/thumb/{image_id}",
+        seed_base=base_seed,
+        seed_used=effective_seed,
     )
 
     with open(meta_path, "w", encoding="utf-8") as f:
@@ -143,7 +154,7 @@ def _meta_entry(project: str, file: Path, relpath: str, meta_json: Optional[Dict
     neg_prompt = ""
     if meta_json:
         created = meta_json.get("created_at", created)
-        seed_val = meta_json.get("seed")
+        seed_val = meta_json.get("seed_used") if meta_json.get("seed_used") is not None else meta_json.get("seed")
         base_prompt = meta_json.get("base_prompt", "")
         neg_prompt = meta_json.get("negative_prompt", "")
     image_id = _image_id_from_path(project, file.name)

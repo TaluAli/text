@@ -423,6 +423,7 @@ function GeneratorPanel({ onGenerated }) {
   const [width, setWidth] = useState(832)
   const [height, setHeight] = useState(1216)
   const [seed, setSeed] = useState(1234567890)
+  const [seedMode, setSeedMode] = useState('fixed')
   const [modelName, setModelName] = useState('nai-diffusion-4-5-full')
   const [project, setProject] = useState('default')
   const [loading, setLoading] = useState(false)
@@ -435,7 +436,7 @@ function GeneratorPanel({ onGenerated }) {
   const [rStart, setRStart] = useState(0.0)
   const [rEnd, setREnd] = useState(0.7)
   const [rStep, setRStep] = useState(0.1)
-  const [jobInfo, setJobInfo] = useState({ jobId: null, total: 0, done: 0, status: '', current_g: null, current_r: null })
+  const [jobInfo, setJobInfo] = useState({ jobId: null, total: 0, done: 0, status: '', current_g: null, current_r: null, current_seed: null })
   const pollRef = useRef(null)
   const formSaveRef = useRef(null)
   const restoredRef = useRef(false)
@@ -456,6 +457,7 @@ function GeneratorPanel({ onGenerated }) {
         if (saved.width !== undefined) setWidth(saved.width)
         if (saved.height !== undefined) setHeight(saved.height)
         if (saved.seed !== undefined) setSeed(saved.seed)
+        if (saved.seedMode !== undefined) setSeedMode(saved.seedMode)
         if (saved.modelName !== undefined) setModelName(saved.modelName)
         if (saved.project !== undefined) setProject(saved.project)
         if (saved.mode !== undefined) setMode(saved.mode)
@@ -484,6 +486,7 @@ function GeneratorPanel({ onGenerated }) {
         width,
         height,
         seed,
+        seedMode,
         modelName,
         project,
         mode,
@@ -503,7 +506,7 @@ function GeneratorPanel({ onGenerated }) {
     return () => {
       if (formSaveRef.current) clearTimeout(formSaveRef.current)
     }
-  }, [basePrompt, char1, char2, negativePrompt, guidance, rescale, width, height, seed, modelName, project, mode, gStart, gEnd, gStep, rStart, rEnd, rStep])
+  }, [basePrompt, char1, char2, negativePrompt, guidance, rescale, width, height, seed, seedMode, modelName, project, mode, gStart, gEnd, gStep, rStart, rEnd, rStep])
 
   const gValues = useMemo(() => buildSweepRange(Number(gStart), Number(gEnd), Number(gStep)), [gStart, gEnd, gStep])
   const rValues = useMemo(() => buildSweepRange(Number(rStart), Number(rEnd), Number(rStep)), [rStart, rEnd, rStep])
@@ -653,6 +656,7 @@ function GeneratorPanel({ onGenerated }) {
           width: Number(width),
           height: Number(height),
           seed: Number(seed),
+          seed_mode: seedMode,
           project,
         }),
       })
@@ -668,6 +672,7 @@ function GeneratorPanel({ onGenerated }) {
         status: 'queued',
         current_g: null,
         current_r: null,
+        current_seed: null,
         started_at: Date.now(),
       })
       pollJob(data.job_id)
@@ -777,6 +782,14 @@ function GeneratorPanel({ onGenerated }) {
           <label>Seed
             <input type="number" value={seed} onChange={(e) => setSeed(e.target.value)} />
           </label>
+          <label>Seed Mode
+            <select value={seedMode} onChange={(e) => setSeedMode(e.target.value)}>
+              <option value="fixed">Fixed</option>
+              <option value="increment">Increment</option>
+              <option value="random">Random</option>
+            </select>
+            <div className="subtle">Fixed keeps noise constant across sweep for fair comparisons.</div>
+          </label>
           {mode === 'single' ? (
             <button onClick={doGenerate} disabled={loading}>{loading ? 'Working...' : 'Generate'}</button>
           ) : (
@@ -809,6 +822,7 @@ function GeneratorPanel({ onGenerated }) {
               {jobInfo.current_g !== null && jobInfo.current_r !== null && (
                 <div className="subtle">Current G {formatTick(jobInfo.current_g)} / R {formatTick(jobInfo.current_r)}</div>
               )}
+              {jobInfo.current_seed !== null && <div className="subtle">Current seed {jobInfo.current_seed}</div>}
             </div>
           )}
           <div className="status">{status}</div>

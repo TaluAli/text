@@ -40,6 +40,8 @@ class ImageMeta(BaseModel):
     height: int
     image_url: str
     thumb_url: str
+    seed_base: Optional[int] = None
+    seed_used: Optional[int] = None
 
 
 class ArchiveItem(BaseModel):
@@ -94,6 +96,7 @@ class GenerateSweepRequest(BaseModel):
     height: int = 1216
     seed: int = 1234567890
     project: str = "default"
+    seed_mode: str = Field("fixed", regex="^(fixed|increment|random)$")
 
 
 class GenerateSweepResponse(BaseModel):
@@ -109,3 +112,4 @@ class JobStatus(BaseModel):
     current_r: Optional[float] = None
     current_filename: Optional[str] = None
     error: Optional[str] = None
+    current_seed: Optional[int] = None

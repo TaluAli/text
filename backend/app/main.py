@@ -90,6 +90,8 @@ def generate(req: GenerateRequest, token: str = Depends(_require_token)):
         project=req.project,
         seed=req.seed,
         payload=payload_meta,
+        seed_base=req.seed,
+        seed_used=req.seed,
     )
 
     return GenerateResponse(
