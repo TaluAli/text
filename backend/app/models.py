@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
 
 
@@ -96,7 +96,7 @@ class GenerateSweepRequest(BaseModel):
     height: int = 1216
     seed: int = 1234567890
     project: str = "default"
-    seed_mode: str = Field("fixed", regex="^(fixed|increment|random)$")
+    seed_mode: Literal["fixed", "increment", "random"] = "fixed"
 
 
 class GenerateSweepResponse(BaseModel):
