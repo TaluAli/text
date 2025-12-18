@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || ''
 
 const defaultMatrix = {
   xParam: 'R',
@@ -338,7 +338,14 @@ function LightboxModal({ item, src, onClose, onPrev, onNext }) {
                 fitImage()
               }}
             />
-            {loadError ? <div className="lightbox-error">{loadError}</div> : null}
+            {loadError ? (
+              <div className="lightbox-error">
+                {loadError}.{' '}
+                <a href={src} target="_blank" rel="noreferrer">
+                  Open original
+                </a>
+              </div>
+            ) : null}
           </div>
         </div>
         <div className="lightbox-footer">
@@ -857,6 +864,7 @@ function ArchiveViewer() {
   const [items, setItems] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [archiveError, setArchiveError] = useState('')
   const [total, setTotal] = useState(0)
   const [viewMode, setViewMode] = useState('grid')
   const [matrix, setMatrix] = useState(defaultMatrix)
@@ -865,6 +873,7 @@ function ArchiveViewer() {
   const [layout, setLayout] = useState(loadLayoutDefaults)
   const layoutDefaults = useRef(loadLayoutDefaults())
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [detailError, setDetailError] = useState('')
   const pageSize = 200
   const matrixWrapperRef = useRef(null)
   const splitRef = useRef(null)
@@ -900,8 +909,13 @@ function ArchiveViewer() {
           const params = new URLSearchParams({ page: String(currentPage), page_size: String(pageSize) })
           if (project.trim()) params.append('project', project.trim())
           if (search.trim()) params.append('q', search.trim())
-          const res = await fetch(`${API_BASE}/api/archives?${params.toString()}`, { signal })
-          if (!res.ok) break
+          const url = `${API_BASE}/api/archives?${params.toString()}`
+          const res = await fetch(url, { signal })
+          if (!res.ok) {
+            console.warn('Archive fetch failed', { url, status: res.status })
+            setArchiveError(`Archives request failed (${res.status})`)
+            break
+          }
           const data = await res.json()
           const batch = data.items || []
           batch.forEach((item) => {
@@ -919,9 +933,11 @@ function ArchiveViewer() {
         setItems(aggregated)
         setTotal(expectedTotal)
         setSelectedId(aggregated.length ? aggregated[0].id : null)
+        setArchiveError('')
       } catch (err) {
         if (err.name !== 'AbortError') {
-          console.error('Archive fetch failed', err)
+          console.error('Archive fetch failed', { message: err?.message })
+          setArchiveError(err?.message || 'Archive request failed')
         }
       } finally {
         setLoading(false)
@@ -1267,7 +1283,17 @@ function ArchiveViewer() {
                 loading="lazy"
                 onClick={() => setLightboxOpen(true)}
                 style={{ cursor: 'zoom-in' }}
+                onLoad={() => setDetailError('')}
+                onError={() => setDetailError('Failed to load image')}
               />
+              {detailError ? (
+                <div className="inline-error">
+                  {detailError}.{' '}
+                  <a href={selectedSrc} target="_blank" rel="noreferrer">
+                    Open original
+                  </a>
+                </div>
+              ) : null}
             </div>
             <textarea
               className="detail-meta"
@@ -1298,6 +1324,7 @@ function ArchiveViewer() {
     <>
       <div className="glass-card archive-card" ref={splitRef}>
         <div className="panel-header">Archive Viewer</div>
+        {archiveError ? <div className="banner error">{archiveError}</div> : null}
         <div className="archive-toolbar">
           <div className="dual">
             <label>
