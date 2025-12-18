@@ -128,7 +128,7 @@ button.ghost { background: rgba(255,255,255,0.08); }
 .thumb { border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 4px; background: rgba(0,0,0,0.3); width: 100%; display: block; }
 .thumb img { width: 100%; height: auto; border-radius: 10px; display: block; }
 .thumb.active { border-color: rgba(140, 200, 255, 0.8); box-shadow: 0 0 0 1px rgba(140,200,255,0.5); }
-.gallery-area { max-height: 60vh; overflow: auto; padding-right: 4px; }
+ .gallery-area { height: 60vh; max-height: 60vh; overflow: auto; padding-right: 4px; min-width: 0; }
 .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
 .viewer-controls { display: flex; gap: 10px; margin: 10px 0; }
 .detail img { width: 100%; border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,0.45); }
@@ -139,9 +139,10 @@ button.ghost { background: rgba(255,255,255,0.08); }
 .matrix-controls { display: flex; flex-direction: column; gap: 10px; padding: 10px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
 .row-align { flex-direction: row; align-items: center; gap: 8px; }
 
-.matrix-wrapper { margin-top: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.2); padding: 8px; width: 100%; max-width: 100%; overflow: auto; flex: 1; min-height: 0; }
-.matrix-scroller { width: 100%; max-width: 100%; overflow: auto; height: 100%; }
-.matrix-grid { display: grid; grid-template-columns: var(--yhdr, 84px) repeat(var(--xcount, 1), minmax(0, 1fr)); gap: 6px; align-items: start; width: 100%; min-width: 0; }
+ .matrix-wrapper { margin-top: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.2); padding: 8px; width: 100%; max-width: 100%; overflow: hidden; flex: 1; min-height: 0; height: 65vh; }
+ .matrix-scroller { width: 100%; max-width: 100%; overflow: auto; height: 100%; }
+ .matrix-grid { display: grid; grid-template-columns: var(--yhdr, 84px) repeat(var(--xcount, 1), minmax(0, 1fr)); gap: 6px; align-items: start; width: 100%; min-width: 0; }
+ .matrix-virtual { width: 100%; height: 100%; min-width: 0; min-height: 0; }
 .matrix-header { font-weight: 700; color: var(--text-secondary); text-align: center; padding: 8px 6px; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .matrix-header.y-header { width: var(--yhdr, 84px); min-width: var(--yhdr, 84px); text-align: right; padding-right: 12px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; background: rgba(10,16,28,0.55); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-right: 1px solid rgba(255,255,255,0.08); z-index: 5; }
 .matrixCell { min-width: 0; min-height: 0; position: relative; border-radius: 14px; border: 1px solid transparent; background: transparent; padding: 2px; transition: border-color 0.15s ease, box-shadow 0.2s ease; }

@@ -14,9 +14,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_ARCHIVE_ROOT = os.getenv("NAI_ARCHIVE_ROOT")
 ARCHIVE_ROOT = Path(ENV_ARCHIVE_ROOT).expanduser() if ENV_ARCHIVE_ROOT else BASE_DIR / "data" / "archives"
 ARCHIVE_ROOT = ARCHIVE_ROOT.resolve()
-THUMB_CACHE = BASE_DIR / "data" / "thumb_cache"
+THUMB_CACHE = BASE_DIR / ".cache" / "thumbs"
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 _RAW_INDEX: Dict[str, Path] = {}
+_INDEX_CACHE = {
+    "ts": 0.0,
+    "sig": 0.0,
+    "projects": {},
+    "counts": {},
+    "all": [],
+}
+_INDEX_TTL_SECONDS = 10.0
 
 
 def sanitize_project(name: str) -> str:
@@ -82,6 +90,13 @@ def build_ids(project: str, seed: int, guidance: float, rescale: float) -> Tuple
     file_name = f"{ts}_{seed}_G{g_token}_R{r_token}.png"
     image_id = f"{project}--{file_name}"
     return image_id, file_name
+
+
+def _latest_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except FileNotFoundError:
+        return 0.0
 
 
 def save_image_and_meta(
@@ -191,6 +206,66 @@ def _raw_entry(path: Path, relpath: str, project: str) -> ArchiveItem:
     )
 
 
+def _index_projects() -> None:
+    global _INDEX_CACHE, _RAW_INDEX
+    now = time.time()
+    root_sig = _latest_mtime(ARCHIVE_ROOT)
+    if _INDEX_CACHE.get("ts") and (now - _INDEX_CACHE["ts"] < _INDEX_TTL_SECONDS) and _INDEX_CACHE.get("sig") == root_sig:
+        return
+
+    entries_by_project: Dict[str, List[ArchiveItem]] = {}
+    counts: Dict[str, int] = {}
+    seen_paths = set()
+    _RAW_INDEX.clear()
+
+    ARCHIVE_ROOT.mkdir(parents=True, exist_ok=True)
+
+    for proj_dir in ARCHIVE_ROOT.iterdir():
+        if not proj_dir.is_dir():
+            continue
+        project = proj_dir.name
+        for file in proj_dir.glob("*.png"):
+            relpath = str(file.relative_to(ARCHIVE_ROOT).as_posix())
+            if relpath in seen_paths:
+                continue
+            meta_path = proj_dir / f"{file.name}.json"
+            meta_json = _load_meta_from_file(meta_path)
+            entry = _meta_entry(project, file, relpath, meta_json)
+            entries_by_project.setdefault(project, []).append(entry)
+            seen_paths.add(relpath)
+            _RAW_INDEX[_build_raw_id(file)] = file
+
+    for path in ARCHIVE_ROOT.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in IMAGE_EXTS:
+            continue
+        if not _is_under_archive(path):
+            continue
+        rel = path.relative_to(ARCHIVE_ROOT)
+        relpath = str(rel.as_posix())
+        if relpath in seen_paths:
+            continue
+        top_level = rel.parts[0] if len(rel.parts) > 1 else "default"
+        entry = _raw_entry(path, relpath, top_level)
+        entries_by_project.setdefault(top_level, []).append(entry)
+        seen_paths.add(relpath)
+
+    for proj, items in entries_by_project.items():
+        items.sort(key=lambda x: x.created_at, reverse=True)
+        counts[proj] = len(items)
+
+    all_items: List[ArchiveItem] = []
+    for proj in sorted(entries_by_project.keys()):
+        all_items.extend(entries_by_project[proj])
+
+    _INDEX_CACHE = {
+        "ts": now,
+        "sig": root_sig,
+        "projects": entries_by_project,
+        "counts": counts,
+        "all": all_items,
+    }
+
+
 def _matches_query(relpath: str, filename: str, query: Optional[str]) -> bool:
     if not query:
         return True
@@ -199,46 +274,17 @@ def _matches_query(relpath: str, filename: str, query: Optional[str]) -> bool:
 
 
 def list_archives(project: Optional[str], page: int, page_size: int, query: Optional[str]) -> Tuple[List[ArchiveItem], int]:
-    ARCHIVE_ROOT.mkdir(parents=True, exist_ok=True)
-    if project:
-        projects = [project]
-    else:
-        projects = [p.name for p in ARCHIVE_ROOT.iterdir() if p.is_dir()]
-        if ARCHIVE_ROOT.exists() and not projects:
-            projects = ["default"] if any(ARCHIVE_ROOT.glob("*")) else []
-
+    _index_projects()
+    available_projects = _INDEX_CACHE.get("projects", {})
+    selected = [project] if project else list(available_projects.keys())
     entries: List[ArchiveItem] = []
-    seen_paths = set()
 
-    for proj in projects:
-        proj_dir = ARCHIVE_ROOT / proj
-        if proj_dir.exists():
-            for file in proj_dir.glob("*.png"):
-                relpath = str(file.relative_to(ARCHIVE_ROOT).as_posix())
-                if not _matches_query(relpath, file.name, query):
-                    continue
-                meta_path = proj_dir / f"{file.name}.json"
-                meta_json = _load_meta_from_file(meta_path)
-                entry = _meta_entry(proj, file, relpath, meta_json)
-                entries.append(entry)
-                seen_paths.add(_normalize_path_str(file))
+    for proj in selected:
+        if proj in available_projects:
+            entries.extend(available_projects[proj])
 
-    for path in ARCHIVE_ROOT.rglob("*"):
-        if not path.is_file() or path.suffix.lower() not in IMAGE_EXTS:
-            continue
-        if not _is_under_archive(path):
-            continue
-        normalized = _normalize_path_str(path)
-        if normalized in seen_paths:
-            continue
-        rel = path.relative_to(ARCHIVE_ROOT)
-        relpath = str(rel.as_posix())
-        top_level = rel.parts[0] if len(rel.parts) > 1 else "default"
-        if project and top_level != project:
-            continue
-        if not _matches_query(relpath, path.name, query):
-            continue
-        entries.append(_raw_entry(path, relpath, top_level))
+    if query:
+        entries = [e for e in entries if _matches_query(e.relpath, e.filename, query)]
 
     entries.sort(key=lambda x: x.created_at, reverse=True)
     total = len(entries)
@@ -248,18 +294,8 @@ def list_archives(project: Optional[str], page: int, page_size: int, query: Opti
 
 
 def list_projects() -> List[ProjectSummary]:
-    ARCHIVE_ROOT.mkdir(parents=True, exist_ok=True)
-    counts: Dict[str, int] = {}
-
-    for path in ARCHIVE_ROOT.rglob("*"):
-        if not path.is_file() or path.suffix.lower() not in IMAGE_EXTS:
-            continue
-        if not _is_under_archive(path):
-            continue
-        rel = path.relative_to(ARCHIVE_ROOT)
-        top_level = rel.parts[0] if len(rel.parts) > 1 else "default"
-        counts[top_level] = counts.get(top_level, 0) + 1
-
+    _index_projects()
+    counts: Dict[str, int] = _INDEX_CACHE.get("counts", {})
     return [ProjectSummary(name=k, count=v) for k, v in sorted(counts.items())]
 
 
@@ -294,21 +330,23 @@ def _thumb_cache_path(image_id: str) -> Path:
     return THUMB_CACHE / f"{image_id}.jpg"
 
 
+def _thumb_cache_key(path: Path, relpath: str) -> str:
+    mtime = int(_latest_mtime(path))
+    payload = f"{relpath}|{mtime}"
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()
+
+
 def _resolve_raw_path(image_id: str) -> Optional[Path]:
+    _index_projects()
     if image_id in _RAW_INDEX:
         path = _RAW_INDEX[image_id]
         if path.exists() and _is_under_archive(path):
             return path
-    for path in ARCHIVE_ROOT.rglob("*"):
-        if path.is_file() and path.suffix.lower() in IMAGE_EXTS:
-            candidate_id = _build_raw_id(path)
-            _RAW_INDEX[candidate_id] = path
-            if candidate_id == image_id and _is_under_archive(path):
-                return path
     return None
 
 
 def get_image_path(image_id: str) -> Optional[Path]:
+    _index_projects()
     meta_path = parse_image_id(image_id)
     if meta_path:
         return meta_path
@@ -323,7 +361,9 @@ def generate_thumb(image_id: str) -> Optional[Path]:
     img_path = get_image_path(image_id)
     if not img_path:
         return None
-    thumb_path = _thumb_cache_path(image_id)
+    rel = img_path.relative_to(ARCHIVE_ROOT)
+    cache_key = _thumb_cache_key(img_path, str(rel.as_posix()))
+    thumb_path = _thumb_cache_path(cache_key)
     if thumb_path.exists():
         return thumb_path
     legacy = _legacy_thumb_path(image_id)
@@ -331,7 +371,7 @@ def generate_thumb(image_id: str) -> Optional[Path]:
         return legacy
     try:
         with Image.open(img_path) as img:
-            img.thumbnail((512, 512))
+            img.thumbnail((384, 384))
             if img.mode not in ("RGB", "L"):
                 img = img.convert("RGB")
             thumb_path.parent.mkdir(parents=True, exist_ok=True)
@@ -345,13 +385,13 @@ def generate_thumb_for_relpath(relpath: str) -> Optional[Path]:
     img_path = _safe_relpath(relpath)
     if not img_path:
         return None
-    thumb_id = _build_raw_id(img_path)
-    thumb_path = _thumb_cache_path(thumb_id)
+    cache_key = _thumb_cache_key(img_path, relpath)
+    thumb_path = _thumb_cache_path(cache_key)
     if thumb_path.exists():
         return thumb_path
     try:
         with Image.open(img_path) as img:
-            img.thumbnail((512, 512))
+            img.thumbnail((384, 384))
             if img.mode not in ("RGB", "L"):
                 img = img.convert("RGB")
             thumb_path.parent.mkdir(parents=True, exist_ok=True)

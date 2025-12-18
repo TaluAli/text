@@ -6,3 +6,4 @@ node_modules/
 dist/
 frontend/node_modules/
 backend/data/
+.cache/

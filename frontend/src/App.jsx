@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FixedSizeGrid, FixedSizeList, VariableSizeGrid } from 'react-window'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || ''
 
@@ -72,6 +73,22 @@ function formatTick(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return ''
   const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1, minimumFractionDigits: 0 })
   return formatter.format(Number(value))
+}
+
+function useSize(ref) {
+  const [size, setSize] = useState({ width: 0, height: 0 })
+  useEffect(() => {
+    if (!ref.current) return undefined
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry?.contentRect) {
+        setSize({ width: entry.contentRect.width, height: entry.contentRect.height })
+      }
+    })
+    observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [ref])
+  return size
 }
 
 function parseParamsFromName(name = '') {
@@ -861,9 +878,11 @@ function ArchiveViewer() {
   const [projects, setProjects] = useState([])
   const [project, setProject] = useState('')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [items, setItems] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [archiveError, setArchiveError] = useState('')
   const [total, setTotal] = useState(0)
   const [viewMode, setViewMode] = useState('grid')
@@ -875,9 +894,16 @@ function ArchiveViewer() {
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [detailError, setDetailError] = useState('')
   const pageSize = 200
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
   const matrixWrapperRef = useRef(null)
+  const galleryWrapperRef = useRef(null)
+  const galleryOuterRef = useRef(null)
+  const matrixOuterRef = useRef(null)
   const splitRef = useRef(null)
   const dragState = useRef({ active: false, startX: 0, startSplit: 60 })
+  const gallerySize = useSize(galleryWrapperRef)
+  const matrixSize = useSize(matrixWrapperRef)
 
   useEffect(() => {
     document.documentElement.style.setProperty('--sel-color', layout.selColor || '#7ec8ff')
@@ -897,42 +923,48 @@ function ArchiveViewer() {
     loadProjects()
   }, [])
 
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedSearch(search), 300)
+    return () => window.clearTimeout(handle)
+  }, [search])
+
   const fetchArchives = useCallback(
-    async (signal) => {
-      setLoading(true)
+    async (pageToLoad, signal) => {
+      const firstPage = pageToLoad === 1
+      if (firstPage) {
+        setLoading(true)
+      } else {
+        setLoadingMore(true)
+      }
       try {
-        let currentPage = 1
-        let aggregated = []
-        let expectedTotal = 0
-        const seen = new Set()
-        while (true) {
-          const params = new URLSearchParams({ page: String(currentPage), page_size: String(pageSize) })
-          if (project.trim()) params.append('project', project.trim())
-          if (search.trim()) params.append('q', search.trim())
-          const url = `${API_BASE}/api/archives?${params.toString()}`
-          const res = await fetch(url, { signal })
-          if (!res.ok) {
+        const params = new URLSearchParams({ page: String(pageToLoad), page_size: String(pageSize) })
+        if (project.trim()) params.append('project', project.trim())
+        if (debouncedSearch.trim()) params.append('q', debouncedSearch.trim())
+        const url = `${API_BASE}/api/archives?${params.toString()}`
+        const res = await fetch(url, { signal })
+        if (!res.ok) {
             console.warn('Archive fetch failed', { url, status: res.status })
             setArchiveError(`Archives request failed (${res.status})`)
-            break
-          }
-          const data = await res.json()
-          const batch = data.items || []
-          batch.forEach((item) => {
-            if (!seen.has(item.id)) {
-              seen.add(item.id)
-              aggregated.push(item)
-            }
-          })
-          expectedTotal = data.total ?? aggregated.length
-          if (!batch.length || aggregated.length >= expectedTotal) {
-            break
-          }
-          currentPage += 1
+            return
         }
-        setItems(aggregated)
+        const data = await res.json()
+        const batch = data.items || []
+        let nextItems = []
+        const expectedTotal = data.total ?? batch.length
         setTotal(expectedTotal)
-        setSelectedId(aggregated.length ? aggregated[0].id : null)
+        setItems((prev) => {
+          const base = firstPage ? [] : prev
+          const map = new Map(base.map((itm) => [itm.id, itm]))
+          batch.forEach((item) => {
+            map.set(item.id, item)
+          })
+          nextItems = Array.from(map.values())
+          if (firstPage) {
+            setSelectedId(nextItems.length ? nextItems[0].id : null)
+          }
+          return nextItems
+        })
+        setHasMore((nextItems?.length || 0) < expectedTotal)
         setArchiveError('')
       } catch (err) {
         if (err.name !== 'AbortError') {
@@ -941,16 +973,35 @@ function ArchiveViewer() {
         }
       } finally {
         setLoading(false)
+        setLoadingMore(false)
       }
     },
-    [pageSize, project, search],
+    [API_BASE, debouncedSearch, pageSize, project],
   )
 
   useEffect(() => {
+    setItems([])
+    setPage(1)
+    setHasMore(true)
+  }, [project, debouncedSearch])
+
+  useEffect(() => {
     const controller = new AbortController()
-    fetchArchives(controller.signal)
+    fetchArchives(1, controller.signal)
     return () => controller.abort()
   }, [fetchArchives])
+
+  useEffect(() => {
+    if (page === 1) return undefined
+    const controller = new AbortController()
+    fetchArchives(page, controller.signal)
+    return () => controller.abort()
+  }, [fetchArchives, page])
+
+  const requestNextPage = useCallback(() => {
+    if (!hasMore || loading || loadingMore) return
+    setPage((p) => p + 1)
+  }, [hasMore, loading, loadingMore])
 
   const parsedItems = useMemo(
     () =>
@@ -978,9 +1029,19 @@ function ArchiveViewer() {
       className={`thumb ${active ? 'active' : ''} ${className}`.trim()}
       onClick={() => onSelect?.()}
     >
-      <img src={thumbSrc(item)} alt={item.id} loading="lazy" />
+      <img src={thumbSrc(item)} alt={item.id} loading="lazy" decoding="async" />
     </button>
   )
+
+  const galleryWidth = Math.max(gallerySize.width, 320)
+  const galleryColumnCount = useMemo(() => Math.max(1, Math.floor(galleryWidth / 180)), [galleryWidth])
+  const galleryColumnWidth = useMemo(
+    () => Math.max(120, Math.floor(galleryWidth / galleryColumnCount)),
+    [galleryColumnCount, galleryWidth],
+  )
+  const galleryRowHeight = useMemo(() => galleryColumnWidth * 0.78 + 26, [galleryColumnWidth])
+  const galleryRowCount = Math.ceil(items.length / galleryColumnCount)
+  const galleryHeight = Math.max(300, Math.min(720, gallerySize.height || 520))
 
   const xParamKey = matrix.xParam === 'G' ? 'g' : 'r'
   const yParamKey = matrix.yParam === 'R' ? 'r' : 'g'
@@ -1044,6 +1105,14 @@ function ArchiveViewer() {
     return { matrixCells: cells, orderedMatrixItems: order, idToCoords: coordMap }
   }, [parsedItems, xParamKey, xTicks, yParamKey, yTicks, matrix.xStep, matrix.yStep, effXStep, effYStep])
 
+  const cellLookup = useMemo(() => {
+    const map = new Map()
+    matrixCells.forEach((cell) => {
+      map.set(cell.key, cell)
+    })
+    return map
+  }, [matrixCells])
+
   const displayOrder = viewMode === 'matrix' ? orderedMatrixItems : items
   const selectedItem = displayOrder.find((i) => i.id === selectedId) || displayOrder[0] || null
   const selectedSrc = selectedItem ? imageSrc(selectedItem) : ''
@@ -1079,6 +1148,30 @@ function ArchiveViewer() {
     observer.observe(el)
     return () => observer.disconnect()
   }, [xTicks.length])
+
+  useEffect(() => {
+    const el = galleryOuterRef.current
+    if (!el) return undefined
+    const onScroll = () => {
+      if (!hasMore || loading || loadingMore) return
+      const remaining = el.scrollHeight - el.scrollTop - el.clientHeight
+      if (remaining < 240) requestNextPage()
+    }
+    el.addEventListener('scroll', onScroll)
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [hasMore, loading, loadingMore, requestNextPage])
+
+  useEffect(() => {
+    const el = matrixOuterRef.current
+    if (!el) return undefined
+    const onScroll = () => {
+      if (!hasMore || loading || loadingMore) return
+      const remainingY = el.scrollHeight - el.scrollTop - el.clientHeight
+      if (remainingY < 240) requestNextPage()
+    }
+    el.addEventListener('scroll', onScroll)
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [hasMore, loading, loadingMore, requestNextPage])
 
   useEffect(() => {
     const handler = (e) => {
@@ -1190,17 +1283,36 @@ function ArchiveViewer() {
         </div>
 
         {viewMode === 'grid' && (
-            <div className="gallery-area">
-              <div className="gallery-grid">
-                {items.map((item) => (
-                  <GalleryThumb
-                    key={item.id}
-                    item={item}
-                    active={item.id === selectedId}
-                    onSelect={() => setSelectedId(item.id)}
-                  />
-                ))}
-              </div>
+            <div className="gallery-area" ref={galleryWrapperRef}>
+              {items.length === 0 && !loading ? <div className="subtle">No results</div> : null}
+              {gallerySize.width > 0 ? (
+                <FixedSizeGrid
+                  columnCount={galleryColumnCount}
+                  columnWidth={galleryColumnWidth}
+                  height={galleryHeight}
+                  rowCount={galleryRowCount}
+                  rowHeight={galleryRowHeight}
+                  width={galleryWidth}
+                  outerRef={galleryOuterRef}
+                  overscanRowCount={2}
+                >
+                  {({ columnIndex, rowIndex, style }) => {
+                    const idx = rowIndex * galleryColumnCount + columnIndex
+                    const item = items[idx]
+                    if (!item) return null
+                    return (
+                      <div style={{ ...style, padding: 4 }}>
+                        <GalleryThumb
+                          key={item.id}
+                          item={item}
+                          active={item.id === selectedId}
+                          onSelect={() => setSelectedId(item.id)}
+                        />
+                      </div>
+                    )
+                  }}
+                </FixedSizeGrid>
+              ) : null}
             </div>
           )}
 
@@ -1213,51 +1325,75 @@ function ArchiveViewer() {
               '--xcount': xTicks.length,
             }}
           >
-            <div className="matrix-scroller">
-              <div className="matrix-grid">
-                <div className="matrix-corner sticky-corner" />
-                {xTicks.map((x) => (
-                  <div key={`x-${x}`} className={`matrix-header x-header ${activeCoords.x === x ? 'active-axis' : ''}`}>
-                    {formatTick(x)}
-                  </div>
-                ))}
-                {yTicks.map((y) => (
-                  <React.Fragment key={`row-${y}`}>
-                    <div className={`matrix-header y-header ${activeCoords.y === y ? 'active-axis' : ''}`}>{formatTick(y)}</div>
-                    {xTicks.map((x) => {
-                      const cell = matrixCells.find((c) => c.xVal === x && c.yVal === y)
-                      const isActive = activeCoords.x === x && activeCoords.y === y
-                      const sameX = activeCoords.x === x
-                      const sameY = activeCoords.y === y
-                      const classes = [
-                        'matrixCell',
-                        isActive ? 'matrixCell--active' : '',
-                        sameX ? 'matrixCell--col' : '',
-                        sameY ? 'matrixCell--row' : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')
-                      return (
-                        <div key={`${y}-${x}`} className={classes}>
-                          {cell?.item ? (
-                            <GalleryThumb
-                              item={cell.item}
-                              active={cell.item.id === selectedId}
-                              onSelect={() => {
-                                setSelectedId(cell.item.id)
-                                setActiveCoords({ x, y })
-                              }}
-                            />
-                          ) : (
-                            <div className="matrix-placeholder">—</div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </React.Fragment>
-                ))}
-              </div>
-            </div>
+            <VariableSizeGrid
+              columnCount={xTicks.length + 1}
+              rowCount={yTicks.length + 1}
+              columnWidth={(index) => (index === 0 ? yHeaderWidth : Math.max(120, Math.floor(Math.max(matrixSize.width - yHeaderWidth, 320) / Math.max(1, xTicks.length))))}
+              rowHeight={(index) => (index === 0 ? 44 : Math.max(140, Math.floor(Math.max(matrixSize.width - yHeaderWidth, 320) / Math.max(1, xTicks.length)) * 0.78 + 22))}
+              width={Math.max(matrixSize.width || 800, 400)}
+              height={Math.max(matrixSize.height || 640, 360)}
+              outerRef={matrixOuterRef}
+              overscanRowCount={2}
+              overscanColumnCount={1}
+              className="matrix-virtual"
+            >
+              {({ columnIndex, rowIndex, style }) => {
+                const isHeaderRow = rowIndex === 0
+                const isHeaderCol = columnIndex === 0
+                const xVal = columnIndex > 0 ? xTicks[columnIndex - 1] : null
+                const yVal = rowIndex > 0 ? yTicks[rowIndex - 1] : null
+
+                let content = null
+                if (isHeaderRow && isHeaderCol) {
+                  content = <div className="matrix-corner sticky-corner" />
+                } else if (isHeaderRow) {
+                  content = (
+                    <div className={`matrix-header x-header ${activeCoords.x === xVal ? 'active-axis' : ''}`} title={formatTick(xVal)}>
+                      {formatTick(xVal)}
+                    </div>
+                  )
+                } else if (isHeaderCol) {
+                  content = (
+                    <div className={`matrix-header y-header ${activeCoords.y === yVal ? 'active-axis' : ''}`} title={formatTick(yVal)}>
+                      {formatTick(yVal)}
+                    </div>
+                  )
+                } else {
+                  const key = `${yVal}|${xVal}`
+                  const cell = cellLookup.get(key)
+                  const item = cell?.item
+                  const isActive = item?.id === selectedId
+                  const sameRow = activeCoords.y === yVal
+                  const sameCol = activeCoords.x === xVal
+                  const cls = [
+                    'matrixCell',
+                    isActive ? 'matrixCell--active' : '',
+                    sameRow ? 'matrixCell--row' : '',
+                    sameCol ? 'matrixCell--col' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
+                  content = (
+                    <div className={cls}>
+                      {item ? (
+                        <GalleryThumb
+                          item={item}
+                          active={item.id === selectedId}
+                          onSelect={() => {
+                            setSelectedId(item.id)
+                            setActiveCoords({ x: xVal, y: yVal })
+                          }}
+                        />
+                      ) : (
+                        <div className="matrix-placeholder">—</div>
+                      )}
+                    </div>
+                  )
+                }
+
+                return <div style={{ ...style, padding: 4 }}>{content}</div>
+              }}
+            </VariableSizeGrid>
           </div>
         )}
       </div>

@@ -155,7 +155,7 @@ def get_image(image_id: str):
 def get_thumb(image_id: str):
     thumb = archive_service.generate_thumb(image_id)
     if thumb:
-        return FileResponse(thumb)
+        return FileResponse(thumb, headers={"Cache-Control": "public, max-age=86400"})
     raise HTTPException(status_code=404, detail="Thumbnail not found")
 
 
@@ -179,7 +179,7 @@ def get_raw_image_by_path(relpath: str):
 def get_thumb_single(image_id: str):
     thumb = archive_service.generate_thumb(image_id)
     if thumb:
-        return FileResponse(thumb)
+        return FileResponse(thumb, headers={"Cache-Control": "public, max-age=86400"})
     raise HTTPException(status_code=404, detail="Thumbnail not found")
 
 
@@ -187,7 +187,7 @@ def get_thumb_single(image_id: str):
 def get_thumb_by_path(relpath: str):
     thumb = archive_service.generate_thumb_for_relpath(relpath)
     if thumb:
-        return FileResponse(thumb)
+        return FileResponse(thumb, headers={"Cache-Control": "public, max-age=86400"})
     raise HTTPException(status_code=404, detail="Thumbnail not found")
 
 
