@@ -62,6 +62,8 @@ body, html { margin: 0; padding: 0; font-family: 'Inter', 'SF Pro Display', syst
 .archive-card { height: calc(100vh - 240px); display: flex; flex-direction: column; gap: 12px; overflow: hidden; width: min(98vw, 2200px); max-width: 100%; }
 .banner { padding: 8px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.16); background: rgba(140, 60, 60, 0.14); color: #ffd7d7; box-shadow: inset 0 1px 0 rgba(255,255,255,0.16); }
 .banner.error { background: rgba(140, 60, 60, 0.14); color: #ffd7d7; }
+.banner.warning { background: rgba(120, 140, 255, 0.12); color: #dfe7ff; border-color: rgba(200, 220, 255, 0.28); }
+.offline-banner { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
 .archive-toolbar { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
 .layout-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .layout-actions .color-picker { display: inline-flex; align-items: center; gap: 6px; }
@@ -297,3 +299,5 @@ button.ghost { background: rgba(255,255,255,0.08); }
 .tab-bar button.active { border-color: rgba(140,200,255,0.8); box-shadow: 0 0 0 1px rgba(140,200,255,0.5); }
 .tab-panel { width: 100%; min-width: 0; }
 .tab-panel.hidden { display: none; }
+.error-boundary-fallback { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 32px; }
+.error-boundary-fallback .glass-card { max-width: 520px; text-align: center; }

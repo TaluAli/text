@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FixedSizeGrid, FixedSizeList, VariableSizeGrid } from 'react-window'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || ''
+const HEALTH_POLL_INTERVAL = 15000
 
 const defaultMatrix = {
   xParam: 'R',
@@ -435,7 +436,7 @@ function GlassSettings({ settings, setSettings }) {
   )
 }
 
-function GeneratorPanel({ onGenerated }) {
+function GeneratorPanel({ onGenerated, onApiError, onApiOk }) {
   const [tokenStatus, setTokenStatus] = useState('No token set')
   const [tokenInput, setTokenInput] = useState('')
   const [basePrompt, setBasePrompt] = useState('1girl, solo, best quality, masterpiece')
@@ -538,12 +539,19 @@ function GeneratorPanel({ onGenerated }) {
 
   const setToken = async () => {
     if (!tokenInput.trim()) return
-    await fetch(`${API_BASE}/api/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: tokenInput }),
-    })
-    setTokenStatus('Token stored (in-memory)')
+    try {
+      const res = await fetch(`${API_BASE}/api/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: tokenInput }),
+      })
+      if (!res.ok) throw new Error(`Token request failed (${res.status})`)
+      setTokenStatus('Token stored (in-memory)')
+      onApiOk?.()
+    } catch (err) {
+      setTokenStatus('Failed to store token')
+      onApiError?.('Backend unavailable')
+    }
   }
 
   const clearPoll = () => {
@@ -583,8 +591,10 @@ function GeneratorPanel({ onGenerated }) {
       setPreview(imageUrl)
       onGenerated?.(data)
       setStatus('Generated')
+      onApiOk?.()
     } catch (err) {
       setStatus('Error generating')
+      onApiError?.('Generation failed')
     } finally {
       setLoading(false)
     }
@@ -602,6 +612,7 @@ function GeneratorPanel({ onGenerated }) {
         const data = await res.json()
         setJobInfo((info) => ({ ...info, ...data, jobId, started_at: info.started_at || Date.now() }))
         setStatus(`${data.status} ${data.done}/${data.total}`)
+        onApiOk?.()
         if (data.status === 'done' || data.status === 'error' || data.status === 'cancelled') {
           setLoading(false)
           clearPoll()
@@ -610,10 +621,11 @@ function GeneratorPanel({ onGenerated }) {
         }
       } catch (err) {
         setStatus('Job polling failed')
+        onApiError?.('Job polling failed')
         clearPoll()
       }
     },
-    [],
+    [onApiError, onApiOk],
   )
 
   useEffect(() => {
@@ -700,8 +712,10 @@ function GeneratorPanel({ onGenerated }) {
         started_at: Date.now(),
       })
       pollJob(data.job_id)
+      onApiOk?.()
     } catch (err) {
       setStatus('Error starting sweep')
+      onApiError?.('Sweep start failed')
       setLoading(false)
     }
   }
@@ -862,7 +876,7 @@ function GeneratorPanel({ onGenerated }) {
   )
 }
 
-function ArchiveViewer() {
+function ArchiveViewer({ onApiError, onApiOk }) {
   const loadLayoutDefaults = () => {
     const fallback = { split: 65, gridFirst: true, selColor: '#7ec8ff' }
     if (typeof window === 'undefined') return fallback
@@ -913,15 +927,19 @@ function ArchiveViewer() {
     const loadProjects = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/projects`)
-        if (!res.ok) return
+        if (!res.ok) {
+          onApiError?.(`Projects request failed (${res.status})`)
+          return
+        }
         const data = await res.json()
         setProjects(data.projects || [])
+        onApiOk?.()
       } catch (err) {
-        /* ignore */
+        onApiError?.('Projects request failed')
       }
     }
     loadProjects()
-  }, [])
+  }, [onApiError, onApiOk])
 
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedSearch(search), 300)
@@ -945,6 +963,7 @@ function ArchiveViewer() {
         if (!res.ok) {
             console.warn('Archive fetch failed', { url, status: res.status })
             setArchiveError(`Archives request failed (${res.status})`)
+            onApiError?.(`Archives request failed (${res.status})`)
             return
         }
         const data = await res.json()
@@ -966,17 +985,19 @@ function ArchiveViewer() {
         })
         setHasMore((nextItems?.length || 0) < expectedTotal)
         setArchiveError('')
+        onApiOk?.()
       } catch (err) {
         if (err.name !== 'AbortError') {
           console.error('Archive fetch failed', { message: err?.message })
           setArchiveError(err?.message || 'Archive request failed')
+          onApiError?.('Archive request failed')
         }
       } finally {
         setLoading(false)
         setLoadingMore(false)
       }
     },
-    [API_BASE, debouncedSearch, pageSize, project],
+    [API_BASE, debouncedSearch, onApiError, onApiOk, pageSize, project],
   )
 
   useEffect(() => {
@@ -1542,12 +1563,49 @@ function ArchiveViewer() {
 export default function App() {
   const [settings, setSettings] = useState(defaultGlass)
   const [activeTab, setActiveTab] = useState('generator')
+  const [backendOk, setBackendOk] = useState(true)
+  const [backendMessage, setBackendMessage] = useState('')
+
+  const markBackendDown = useCallback((message = 'Backend unavailable') => {
+    setBackendOk(false)
+    setBackendMessage(message)
+  }, [])
+
+  const markBackendUp = useCallback(() => {
+    setBackendOk(true)
+    setBackendMessage('')
+  }, [])
+
+  const checkHealth = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/health`)
+      if (res.ok) {
+        markBackendUp()
+      } else {
+        markBackendDown(`Backend unavailable (${res.status})`)
+      }
+    } catch (err) {
+      markBackendDown('Backend unreachable')
+    }
+  }, [markBackendDown, markBackendUp])
+
+  useEffect(() => {
+    checkHealth()
+    const timer = window.setInterval(checkHealth, HEALTH_POLL_INTERVAL)
+    return () => window.clearInterval(timer)
+  }, [checkHealth])
 
   return (
     <div className="app-shell">
       <div className="aurora-layer" />
       <div className="aurora-layer glow" />
       <div className="content">
+        {!backendOk && (
+          <div className="banner warning offline-banner">
+            <div>{backendMessage || 'Backend offline'}</div>
+            <button className="ghost" onClick={checkHealth}>Retry</button>
+          </div>
+        )}
         <header className="hero">
           <h1>NAI Studio Web</h1>
           <p>FastAPI + React remake with premium dark glassmorphism.</p>
@@ -1564,7 +1622,7 @@ export default function App() {
         <div className={`tab-panel ${activeTab === 'generator' ? 'active' : 'hidden'}`}>
           <div className="top-layout">
             <div className="card-column">
-              <GeneratorPanel />
+              <GeneratorPanel onApiError={markBackendDown} onApiOk={markBackendUp} />
             </div>
             <div className="card-column">
               <GlassSettings settings={settings} setSettings={setSettings} />
@@ -1574,7 +1632,7 @@ export default function App() {
 
         <div className={`tab-panel ${activeTab === 'archive' ? 'active' : 'hidden'}`}>
           <div className="archive-tab">
-            <ArchiveViewer />
+            <ArchiveViewer onApiError={markBackendDown} onApiOk={markBackendUp} />
           </div>
         </div>
       </div>

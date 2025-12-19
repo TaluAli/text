@@ -41,6 +41,12 @@ app.add_middleware(
 _TOKEN: Optional[str] = None
 
 
+@app.get("/api/health")
+def health() -> dict:
+    """Lightweight health check that does not depend on archive indexing."""
+    return {"ok": True}
+
+
 @app.on_event("startup")
 def _startup_index():
     # Build an initial archive index to avoid first-hit latency on archives
