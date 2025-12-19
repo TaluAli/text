@@ -1045,13 +1045,21 @@ function ArchiveViewer({ onApiError, onApiOk }) {
     return ''
   }
 
-  const GalleryThumb = ({ item, active, onSelect, className = '' }) => (
-    <button
-      className={`thumb ${active ? 'active' : ''} ${className}`.trim()}
-      onClick={() => onSelect?.()}
-    >
-      <img src={thumbSrc(item)} alt={item.id} loading="lazy" decoding="async" />
-    </button>
+  const selectItem = useCallback((id) => setSelectedId(id), [])
+
+  const GalleryThumb = useMemo(
+    () =>
+      React.memo(function GalleryThumbInner({ item, active, onSelectId, className = '' }) {
+        return (
+          <button
+            className={`thumb ${active ? 'active' : ''} ${className}`.trim()}
+            onClick={() => onSelectId?.(item.id)}
+          >
+            <img src={thumbSrc(item)} alt={item.id} loading="lazy" decoding="async" />
+          </button>
+        )
+      }),
+    [thumbSrc],
   )
 
   const galleryWidth = Math.max(gallerySize.width, 320)
@@ -1075,12 +1083,12 @@ function ArchiveViewer({ onApiError, onApiOk }) {
             key={item.id}
             item={item}
             active={item.id === selectedId}
-            onSelect={() => setSelectedId(item.id)}
+            onSelectId={selectItem}
           />
         </div>
       )
     },
-    [galleryColumnCount, items, selectedId],
+    [galleryColumnCount, items, selectItem, selectedId],
   )
 
   const xParamKey = matrix.xParam === 'G' ? 'g' : 'r'
@@ -1229,9 +1237,9 @@ function ArchiveViewer({ onApiError, onApiOk }) {
                 key={item.id}
                 item={item}
                 active={isActive}
-                onSelect={() => {
+                onSelectId={(id) => {
                   setActiveCoords({ x: xVal, y: yVal })
-                  setSelectedId(item.id)
+                  setSelectedId(id)
                 }}
               />
             ) : (
