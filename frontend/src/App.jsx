@@ -1054,6 +1054,16 @@ function ArchiveViewer({ onApiError, onApiOk }) {
     </button>
   )
 
+  const galleryWidth = Math.max(gallerySize.width, 320)
+  const galleryColumnCount = useMemo(() => Math.max(1, Math.floor(galleryWidth / 180)), [galleryWidth])
+  const galleryColumnWidth = useMemo(
+    () => Math.max(120, Math.floor(galleryWidth / galleryColumnCount)),
+    [galleryColumnCount, galleryWidth],
+  )
+  const galleryRowHeight = useMemo(() => galleryColumnWidth * 0.78 + 26, [galleryColumnWidth])
+  const galleryRowCount = Math.ceil(items.length / galleryColumnCount)
+  const galleryHeight = Math.max(300, Math.min(720, gallerySize.height || 520))
+
   const renderGalleryCell = useCallback(
     ({ columnIndex, rowIndex, style }) => {
       const idx = rowIndex * galleryColumnCount + columnIndex
@@ -1072,16 +1082,6 @@ function ArchiveViewer({ onApiError, onApiOk }) {
     },
     [galleryColumnCount, items, selectedId],
   )
-
-  const galleryWidth = Math.max(gallerySize.width, 320)
-  const galleryColumnCount = useMemo(() => Math.max(1, Math.floor(galleryWidth / 180)), [galleryWidth])
-  const galleryColumnWidth = useMemo(
-    () => Math.max(120, Math.floor(galleryWidth / galleryColumnCount)),
-    [galleryColumnCount, galleryWidth],
-  )
-  const galleryRowHeight = useMemo(() => galleryColumnWidth * 0.78 + 26, [galleryColumnWidth])
-  const galleryRowCount = Math.ceil(items.length / galleryColumnCount)
-  const galleryHeight = Math.max(300, Math.min(720, gallerySize.height || 520))
 
   const xParamKey = matrix.xParam === 'G' ? 'g' : 'r'
   const yParamKey = matrix.yParam === 'R' ? 'r' : 'g'
