@@ -1,0 +1,11 @@
+{
+  "name": "nai-studio-root",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n backend,frontend -c blue,magenta \"cd backend && uvicorn app.main:app --reload --port 8000\" \"cd frontend && npm run dev\"",
+    "install:frontend": "cd frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
