@@ -54,6 +54,8 @@ class ArchiveItem(BaseModel):
     project: str
     filename: str
     relpath: str
+    guidance_token: Optional[float] = None
+    rescale_token: Optional[float] = None
 
 
 class ArchiveResponse(BaseModel):

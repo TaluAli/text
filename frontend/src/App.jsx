@@ -153,6 +153,17 @@ function uniqueSorted(values = []) {
     .sort((a, b) => a - b)
 }
 
+const GalleryThumb = React.memo(function GalleryThumb({ item, active, onSelectId, thumbUrlBuilder, className = '' }) {
+  return (
+    <button
+      className={`thumb ${active ? 'active' : ''} ${className}`.trim()}
+      onClick={() => onSelectId?.(item.id)}
+    >
+      <img src={thumbUrlBuilder(item)} alt={item.id} loading="lazy" decoding="async" />
+    </button>
+  )
+})
+
 function LightboxModal({ item, src, onClose, onPrev, onNext }) {
   const containerRef = useRef(null)
   const imgRef = useRef(null)
@@ -1024,43 +1035,35 @@ function ArchiveViewer({ onApiError, onApiOk }) {
     setPage((p) => p + 1)
   }, [hasMore, loading, loadingMore])
 
-  const parsedItems = useMemo(
-    () =>
-      items.map((item) => ({
-        ...item,
-        params: parseParamsFromName(item.filename || item.relpath || ''),
-      })),
-    [items],
-  )
-
-  const thumbSrc = (item) => {
+  const thumbSrc = useCallback((item) => {
     if (item?.relpath) return `${API_BASE}/api/thumb_path/${encodeRelpath(item.relpath)}`
     if (item?.thumb_url) return `${API_BASE}${item.thumb_url}`
     return ''
-  }
+  }, [API_BASE])
 
-  const imageSrc = (item) => {
+  const parsedItems = useMemo(
+    () =>
+      items.map((item) => {
+        const serverG = item.guidance_token
+        const serverR = item.rescale_token
+        if (serverG !== null && serverG !== undefined && serverR !== null && serverR !== undefined) {
+          return { ...item, params: { g: Number(serverG), r: Number(serverR) } }
+        }
+        return {
+          ...item,
+          params: parseParamsFromName(item.filename || item.relpath || ''),
+        }
+      }),
+    [items],
+  )
+
+  const imageSrc = useCallback((item) => {
     if (item?.relpath) return `${API_BASE}/api/raw_path/${encodeRelpath(item.relpath)}`
     if (item?.image_url) return `${API_BASE}${item.image_url}`
     return ''
-  }
+  }, [API_BASE])
 
   const selectItem = useCallback((id) => setSelectedId(id), [])
-
-  const GalleryThumb = useMemo(
-    () =>
-      React.memo(function GalleryThumbInner({ item, active, onSelectId, className = '' }) {
-        return (
-          <button
-            className={`thumb ${active ? 'active' : ''} ${className}`.trim()}
-            onClick={() => onSelectId?.(item.id)}
-          >
-            <img src={thumbSrc(item)} alt={item.id} loading="lazy" decoding="async" />
-          </button>
-        )
-      }),
-    [thumbSrc],
-  )
 
   const galleryWidth = Math.max(gallerySize.width, 320)
   const galleryColumnCount = useMemo(() => Math.max(1, Math.floor(galleryWidth / 180)), [galleryWidth])
@@ -1084,11 +1087,12 @@ function ArchiveViewer({ onApiError, onApiOk }) {
             item={item}
             active={item.id === selectedId}
             onSelectId={selectItem}
+            thumbUrlBuilder={thumbSrc}
           />
         </div>
       )
     },
-    [galleryColumnCount, items, selectItem, selectedId],
+    [galleryColumnCount, items, selectItem, selectedId, thumbSrc],
   )
 
   const xParamKey = matrix.xParam === 'G' ? 'g' : 'r'
@@ -1125,7 +1129,7 @@ function ArchiveViewer({ onApiError, onApiOk }) {
   const effXStep = matrix.autoX ? inferStep(xTicks, matrix.xStep) : matrix.xStep
   const effYStep = matrix.autoY ? inferStep(yTicks, matrix.yStep) : matrix.yStep
 
-  const { matrixCells, orderedMatrixItems, idToCoords } = useMemo(() => {
+  const { cellLookup, orderedMatrixItems, idToCoords } = useMemo(() => {
     const mapping = new Map()
     parsedItems.forEach((item) => {
       const xVal = nearestTick(item.params?.[xParamKey], xTicks, effXStep)
@@ -1135,14 +1139,14 @@ function ArchiveViewer({ onApiError, onApiOk }) {
       if (!mapping.has(key)) mapping.set(key, item)
     })
 
-    const cells = []
     const order = []
     const coordMap = new Map()
+    const lookup = new Map()
     yTicks.forEach((yVal) => {
       xTicks.forEach((xVal) => {
         const key = `${yVal}|${xVal}`
         const item = mapping.get(key) || null
-        cells.push({ key, xVal, yVal, item })
+        lookup.set(key, { key, xVal, yVal, item })
         if (item) {
           order.push(item)
           coordMap.set(item.id, { x: xVal, y: yVal })
@@ -1150,16 +1154,8 @@ function ArchiveViewer({ onApiError, onApiOk }) {
       })
     })
 
-    return { matrixCells: cells, orderedMatrixItems: order, idToCoords: coordMap }
+    return { cellLookup: lookup, orderedMatrixItems: order, idToCoords: coordMap }
   }, [parsedItems, xParamKey, xTicks, yParamKey, yTicks, matrix.xStep, matrix.yStep, effXStep, effYStep])
-
-  const cellLookup = useMemo(() => {
-    const map = new Map()
-    matrixCells.forEach((cell) => {
-      map.set(cell.key, cell)
-    })
-    return map
-  }, [matrixCells])
 
   const displayOrder = viewMode === 'matrix' ? orderedMatrixItems : items
   const selectedItem = displayOrder.find((i) => i.id === selectedId) || displayOrder[0] || null
@@ -1241,6 +1237,7 @@ function ArchiveViewer({ onApiError, onApiOk }) {
                   setActiveCoords({ x: xVal, y: yVal })
                   setSelectedId(id)
                 }}
+                thumbUrlBuilder={thumbSrc}
               />
             ) : (
               <div className="matrix-placeholder">—</div>
@@ -1255,7 +1252,7 @@ function ArchiveViewer({ onApiError, onApiOk }) {
         </div>
       )
     },
-    [activeCoords.x, activeCoords.y, cellLookup, selectedId, xTicks, yTicks],
+    [activeCoords.x, activeCoords.y, cellLookup, selectedId, thumbSrc, xTicks, yTicks],
   )
 
   useEffect(() => {

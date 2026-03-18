@@ -146,7 +146,7 @@ def cancel_job(job_id: str):
 def archives(
     project: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(30, ge=1, le=200),
+    page_size: int = Query(200, ge=1, le=400),
     q: Optional[str] = Query(None),
 ):
     items, total = archive_service.list_archives(project, page, page_size, q)
@@ -164,7 +164,7 @@ def get_image(image_id: str):
     path = archive_service.get_image_path(image_id)
     if not path:
         raise HTTPException(status_code=404, detail="Image not found")
-    return FileResponse(path)
+    return FileResponse(path, headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/api/thumbs/{image_id}")
@@ -180,7 +180,7 @@ def get_raw_image(image_id: str):
     path = archive_service.get_image_path(image_id)
     if not path:
         raise HTTPException(status_code=404, detail="Image not found")
-    return FileResponse(path)
+    return FileResponse(path, headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/api/raw_path/{relpath:path}")
@@ -188,7 +188,7 @@ def get_raw_image_by_path(relpath: str):
     path = archive_service.get_path_from_relpath(relpath)
     if not path:
         raise HTTPException(status_code=404, detail="Image not found")
-    return FileResponse(path)
+    return FileResponse(path, headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/api/thumb/{image_id}")

@@ -16,14 +16,20 @@ ARCHIVE_ROOT = Path(ENV_ARCHIVE_ROOT).expanduser() if ENV_ARCHIVE_ROOT else BASE
 ARCHIVE_ROOT = ARCHIVE_ROOT.resolve()
 THUMB_CACHE = BASE_DIR / ".cache" / "thumbs"
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+RESAMPLE = getattr(Image, "Resampling", Image).LANCZOS
 _RAW_INDEX: Dict[str, Path] = {}
 _INDEX_CACHE = {
     "ts": 0.0,
     "sig": 0.0,
     "projects": {},
+    "all": [],
     "counts": {},
 }
 _INDEX_TTL_SECONDS = 180.0
+TOKEN_PATTERNS = (
+    re.compile(r"G(?P<g>\d+(?:\.\d+)?)\D+R(?P<r>\d+(?:\.\d+)?)", re.IGNORECASE),
+    re.compile(r"R(?P<r>\d+(?:\.\d+)?)\D+G(?P<g>\d+(?:\.\d+)?)", re.IGNORECASE),
+)
 
 
 def sanitize_project(name: str) -> str:
@@ -80,6 +86,20 @@ def _format_param(value: float, digits: int = 1) -> str:
         return f"{float(value):.{digits}f}"
     except Exception:
         return "0.0"
+
+
+def _parse_gr_tokens(name: str) -> Tuple[Optional[float], Optional[float]]:
+    for pattern in TOKEN_PATTERNS:
+        match = pattern.search(name)
+        if not match:
+            continue
+        try:
+            g = round(float(match.group("g")), 1)
+            r = round(float(match.group("r")), 1)
+            return g, r
+        except Exception:
+            return None, None
+    return None, None
 
 
 def build_ids(project: str, seed: int, guidance: float, rescale: float) -> Tuple[str, str]:
@@ -175,6 +195,7 @@ def _meta_entry(project: str, file: Path, relpath: str, meta_json: Optional[Dict
     prompts = base_prompt
     if neg_prompt:
         prompts = f"{prompts} | NEG: {neg_prompt}" if prompts else f"NEG: {neg_prompt}"
+    token_g, token_r = _parse_gr_tokens(file.stem)
     return ArchiveItem(
         id=image_id,
         thumb_url=_path_thumb_url(relpath),
@@ -185,6 +206,8 @@ def _meta_entry(project: str, file: Path, relpath: str, meta_json: Optional[Dict
         project=project,
         filename=file.name,
         relpath=relpath,
+        guidance_token=token_g,
+        rescale_token=token_r,
     )
 
 
@@ -192,6 +215,7 @@ def _raw_entry(path: Path, relpath: str, project: str) -> ArchiveItem:
     raw_id = _build_raw_id(path)
     _RAW_INDEX[raw_id] = path
     created = path.stat().st_mtime
+    token_g, token_r = _parse_gr_tokens(path.stem)
     return ArchiveItem(
         id=raw_id,
         thumb_url=_path_thumb_url(relpath),
@@ -202,6 +226,8 @@ def _raw_entry(path: Path, relpath: str, project: str) -> ArchiveItem:
         project=project,
         filename=path.name,
         relpath=relpath,
+        guidance_token=token_g,
+        rescale_token=token_r,
     )
 
 
@@ -239,14 +265,18 @@ def refresh_index(force: bool = False) -> Dict:
                 entry = _raw_entry(path, relpath, project)
             entries_by_project.setdefault(project, []).append(entry)
 
+    all_entries: List[ArchiveItem] = []
     for proj, items in entries_by_project.items():
         items.sort(key=lambda x: x.created_at, reverse=True)
         counts[proj] = len(items)
+        all_entries.extend(items)
+    all_entries.sort(key=lambda x: x.created_at, reverse=True)
 
     _INDEX_CACHE = {
         "ts": now,
         "sig": root_sig,
         "projects": entries_by_project,
+        "all": all_entries,
         "counts": counts,
     }
     return _INDEX_CACHE
@@ -262,21 +292,20 @@ def _matches_query(relpath: str, filename: str, query: Optional[str]) -> bool:
 def list_archives(project: Optional[str], page: int, page_size: int, query: Optional[str]) -> Tuple[List[ArchiveItem], int]:
     refresh_index()
     available_projects = _INDEX_CACHE.get("projects", {})
-    selected = [project] if project else list(available_projects.keys())
-    entries: List[ArchiveItem] = []
-
-    for proj in selected:
-        if proj in available_projects:
-            entries.extend(available_projects[proj])
+    if project:
+        entries = available_projects.get(project, [])
+    else:
+        entries = _INDEX_CACHE.get("all", [])
 
     if query:
-        entries = [e for e in entries if _matches_query(e.relpath, e.filename, query)]
+        filtered = [e for e in entries if _matches_query(e.relpath, e.filename, query)]
+    else:
+        filtered = entries
 
-    entries.sort(key=lambda x: x.created_at, reverse=True)
-    total = len(entries)
+    total = len(filtered)
     start = max(0, (page - 1) * page_size)
     end = start + page_size
-    return entries[start:end], total
+    return filtered[start:end], total
 
 
 def list_projects() -> List[ProjectSummary]:
@@ -355,16 +384,7 @@ def generate_thumb(image_id: str) -> Optional[Path]:
     legacy = _legacy_thumb_path(image_id)
     if legacy and legacy.exists():
         return legacy
-    try:
-        with Image.open(img_path) as img:
-            img.thumbnail((384, 384))
-            if img.mode not in ("RGB", "L"):
-                img = img.convert("RGB")
-            thumb_path.parent.mkdir(parents=True, exist_ok=True)
-            img.save(thumb_path, format="JPEG")
-        return thumb_path
-    except Exception:
-        return None
+    return _generate_thumb_from_path(img_path, thumb_path)
 
 
 def generate_thumb_for_relpath(relpath: str) -> Optional[Path]:
@@ -375,13 +395,17 @@ def generate_thumb_for_relpath(relpath: str) -> Optional[Path]:
     thumb_path = _thumb_cache_path(cache_key)
     if thumb_path.exists():
         return thumb_path
+    return _generate_thumb_from_path(img_path, thumb_path)
+
+
+def _generate_thumb_from_path(img_path: Path, thumb_path: Path) -> Optional[Path]:
     try:
         with Image.open(img_path) as img:
-            img.thumbnail((384, 384))
+            img.thumbnail((320, 320), RESAMPLE)
             if img.mode not in ("RGB", "L"):
                 img = img.convert("RGB")
             thumb_path.parent.mkdir(parents=True, exist_ok=True)
-            img.save(thumb_path, format="JPEG")
+            img.save(thumb_path, format="JPEG", quality=78, optimize=True)
         return thumb_path
     except Exception:
         return None
